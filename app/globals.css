@@ -1,0 +1,363 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap");
+@import "tailwindcss";
+
+@theme {
+  --color-ink: #090909;
+  --color-paper: #f4f3f0;
+  --color-orange: #ff4b0b;
+  --color-orange-light: #ff7a42;
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --shadow-orange: 0 14px 34px -12px rgb(255 75 11 / 0.55);
+}
+
+:root {
+  font-family: Inter, Arial, sans-serif;
+  color: #090909;
+  background: #f4f3f0;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+html,
+body {
+  /* Backstop, not the fix — every known source of horizontal overflow
+     (fixed-width dropdowns, nowrap text, etc.) is sized/wrapped correctly
+     at its own source. This only guards against a genuinely unforeseen
+     child ever forcing the page itself into a sideways scroll. */
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  background: #f4f3f0;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+::selection {
+  background: #ff4b0b;
+  color: white;
+}
+
+@layer components {
+  .page-shell {
+    @apply mx-auto w-full max-w-[1760px] px-[18px] sm:px-[22px] md:px-[28px] lg:px-[32px] xl:px-[40px];
+  }
+
+  .eyebrow {
+    @apply font-display text-[13px] font-bold uppercase tracking-[0.16em];
+  }
+
+  .display-title {
+    @apply font-display font-bold uppercase leading-[0.92] tracking-[-0.02em];
+  }
+
+  .outline-button {
+    @apply inline-flex min-h-11 items-center justify-center border border-current px-6 font-display text-sm font-bold uppercase tracking-[0.08em] transition duration-300 hover:bg-orange hover:text-white hover:border-orange;
+  }
+
+  .orange-button {
+    @apply inline-flex min-h-11 items-center justify-center bg-orange px-6 font-display text-sm font-bold uppercase tracking-[0.08em] text-white transition duration-300 hover:-translate-y-0.5 hover:shadow-orange;
+  }
+}
+
+.hero-vignette {
+  background:
+    linear-gradient(90deg, rgba(0, 0, 0, 0.83) 0%, rgba(0, 0, 0, 0.61) 34%, rgba(0, 0, 0, 0.19) 68%, rgba(0, 0, 0, 0.28) 100%),
+    linear-gradient(0deg, rgba(0, 0, 0, 0.72) 0%, rgba(0, 0, 0, 0) 42%);
+}
+
+.image-scrim {
+  background: linear-gradient(90deg, rgba(0, 0, 0, 0.8), rgba(0, 0, 0, 0.17) 72%);
+}
+
+.portfolio-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(0deg, rgba(0, 0, 0, 0.68), rgba(0, 0, 0, 0) 46%);
+  pointer-events: none;
+}
+
+@keyframes map-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+@keyframes map-glow {
+  0%, 100% { filter: drop-shadow(0 0 8px rgba(255, 75, 11, 0.3)); }
+  50% { filter: drop-shadow(0 0 22px rgba(255, 75, 11, 0.6)); }
+}
+
+.norway-map-anim {
+  animation: map-float 5s ease-in-out infinite, map-glow 3.5s ease-in-out infinite;
+}
+
+/* Website Editor (admin CMS) — only rendered inside the dashboard preview,
+   never on the public site. */
+.pv-editable {
+  cursor: pointer;
+  outline: 1px dashed transparent;
+  outline-offset: 3px;
+  border-radius: 2px;
+  transition: outline-color 0.15s;
+}
+.pv-editable:hover {
+  outline-color: #ff4b00;
+  background: rgba(255, 75, 11, 0.08);
+}
+/* Floating text-edit popover — a portal to document.body, positioned via
+   inline top/left computed from the clicked element's own bounding rect,
+   so it's never clipped by a section's overflow/transform and never lands
+   somewhere the admin has to scroll to find. */
+.pv-popover-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 350;
+  background: transparent;
+}
+.pv-popover {
+  position: fixed;
+  z-index: 351;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: #141515;
+  padding: 10px;
+  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.5);
+}
+/* The "angle" pointer connecting the popover back to whatever was clicked —
+   sits at the top edge pointing up when the popover opened below its
+   anchor, or the bottom edge pointing down when it opened above. */
+.pv-popover-caret {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  margin-left: -7px;
+  background: #141515;
+  transform: rotate(45deg);
+}
+.pv-popover-below .pv-popover-caret {
+  top: -7px;
+  border-left: 1px solid rgba(255, 255, 255, 0.14);
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+}
+.pv-popover-above .pv-popover-caret {
+  bottom: -7px;
+  border-right: 1px solid rgba(255, 255, 255, 0.14);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+}
+.pv-popover-textarea {
+  width: 100%;
+  resize: vertical;
+  border-radius: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.04);
+  padding: 8px 10px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: white;
+  outline: none;
+}
+.pv-popover-textarea:focus {
+  border-color: #ff4b00;
+}
+.pv-popover-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+}
+.pv-popover-cancel,
+.pv-popover-save {
+  border-radius: 7px;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 700;
+  color: white;
+  cursor: pointer;
+}
+.pv-popover-cancel {
+  background: #3f3f46;
+}
+.pv-popover-save {
+  background: #ff4b00;
+}
+.pv-popover-cancel:disabled,
+.pv-popover-save:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.pv-editable-image {
+  position: relative;
+  display: block;
+  cursor: pointer;
+  outline: 2px dashed transparent;
+  outline-offset: -2px;
+  transition: outline-color 0.15s;
+  height: 100%;
+  width: 100%;
+}
+.pv-editable-image:hover {
+  outline-color: #ff4b00;
+}
+.pv-image-uploading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+}
+.pv-image-uploading-spinner {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: 3px solid rgba(255, 255, 255, 0.25);
+  border-top-color: #ff4b00;
+  animation: pv-spin 0.7s linear infinite;
+}
+.pv-upload-spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  border: 2px solid rgba(255, 75, 11, 0.25);
+  border-top-color: #ff4b00;
+  animation: pv-spin 0.7s linear infinite;
+}
+@keyframes pv-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.pv-cms-toolbar {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  border-radius: 8px;
+  background: rgba(10, 10, 10, 0.92);
+  padding: 5px;
+  backdrop-filter: blur(4px);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+}
+.pv-cms-toolbar button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 5px;
+  color: white;
+  cursor: pointer;
+}
+.pv-cms-toolbar button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.18);
+}
+.pv-cms-toolbar button:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+.pv-cms-toolbar-sep {
+  width: 1px;
+  height: 16px;
+  background: rgba(255, 255, 255, 0.15);
+  flex-shrink: 0;
+}
+.pv-cms-toolbar-danger {
+  color: #f87171 !important;
+}
+.pv-cms-toolbar-danger:hover:not(:disabled) {
+  background: rgba(220, 38, 38, 0.35) !important;
+  color: white !important;
+}
+/* Hidden until the item it belongs to is hovered/focused — this is what
+   keeps only one toolbar on screen at a time instead of every card in a
+   grid showing its own icon row simultaneously. Shows instantly, but hiding
+   is delayed — the mouse has to travel from the small label down to the
+   toolbar below it, and without a grace period the toolbar vanishes mid-
+   transit (during the gap between the two) before it can ever be clicked. */
+.pv-cms-toolbar-hoverable {
+  opacity: 0;
+  transition: opacity 0.18s ease 0.45s;
+  pointer-events: none;
+}
+.group:hover .pv-cms-toolbar-hoverable,
+.group:focus-within .pv-cms-toolbar-hoverable {
+  opacity: 1;
+  transition: opacity 0.1s ease 0s;
+  pointer-events: auto;
+}
+
+/* For tight inline lists (header nav, hero services, footer social icons) —
+   positioned relative to the item's own wrapping `.group relative` span,
+   directly below just that item, instead of the shared card-corner
+   position. Sits flush against the label (no gap) so the mouse never has
+   to cross dead space to reach it, and the extra top padding widens the
+   toolbar's own hit area upward as a second safety margin. */
+.pv-cms-toolbar-inline {
+  top: 100%;
+  left: 0;
+  right: auto;
+  margin-top: 0;
+  padding-top: 10px;
+}
+/* For flex rows that already lay the toolbar out themselves (mobile menu
+   list items use justify-between) — let it flow as a normal flex child. */
+.pv-cms-toolbar-static {
+  position: static;
+  margin-left: 8px;
+}
+.pv-add-inline-btn {
+  border: 1px dashed rgba(255, 75, 11, 0.6);
+  border-radius: 5px;
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #ff4b0b;
+  cursor: pointer;
+  text-transform: none;
+  letter-spacing: normal;
+}
+.pv-add-inline-btn:hover {
+  background: rgba(255, 75, 11, 0.1);
+}
+
+.pv-add-item-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1.5px dashed rgba(255, 75, 11, 0.5);
+  border-radius: 10px;
+  padding: 10px 18px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #ff4b0b;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.pv-add-item-btn:hover {
+  background: rgba(255, 75, 11, 0.08);
+  border-color: #ff4b0b;
+}
+
+.pv-cms-popover {
+  max-height: min(640px, calc(100vh - 40px));
+  overflow-y: auto;
+}
+
+

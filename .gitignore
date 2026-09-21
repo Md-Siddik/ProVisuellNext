@@ -1,0 +1,24 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+
+node_modules
+.next
+out
+build
+dist
+
+# Secrets
+.env
+.env.local
+.env.*.local
+
+# Uploaded files (dev-local storage, mirrors Server/uploads convention)
+/public/uploads/*
+!/public/uploads/.gitkeep
+
+.DS_Store
+*.pem
+.vscode/*
+!.vscode/extensions.json

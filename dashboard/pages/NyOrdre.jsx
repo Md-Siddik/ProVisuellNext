@@ -1,12 +1,12 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
-import { getLocale } from "@/lib/i18n/locale"
 import { useRouter } from "next/navigation"
 import { CalendarClock, CloudUpload, File, Plus, Search, UserCheck, X } from "lucide-react"
 import { api } from "@/lib/api"
 import { useTranslation } from "@/lib/i18n"
 import { useAuth } from "@/context/AuthContext"
+import { useTimeFormat } from "@/context/TimeFormatContext"
 
 const SERVICES = ["Brandify", "Packaging", "Vehicle Protection", "Window Tint", "PPF"]
 const VAT_RATES = [25, 15, 12, 0]
@@ -16,13 +16,14 @@ function nok(value = 0) {
   return `kr ${Math.round(Number(value) || 0).toLocaleString("no-NO")},-`
 }
 
-function formatApptOption(a, t) {
-  const when = new Date(a.start).toLocaleString(getLocale(), { dateStyle: "medium", timeStyle: "short" })
+function formatApptOption(a, t, formatInstantDateTime) {
+  const when = formatInstantDateTime(a.start)
   return a.status === "completed" ? `${a.title} — ${when} ${t("newOrderPage.completedSuffix")}` : `${a.title} — ${when}`
 }
 
 export default function NyOrdre() {
   const { t } = useTranslation()
+  const { formatInstantDateTime } = useTimeFormat()
   const router = useRouter()
   const { role } = useAuth()
   const base = role === "owner" ? "/dashboard/owner" : "/dashboard/admin"
@@ -325,7 +326,7 @@ export default function NyOrdre() {
               </option>
               {matchingAppointments.map((a) => (
                 <option key={a._id} value={a._id} className="bg-[#111212]">
-                  {formatApptOption(a, t)}
+                  {formatApptOption(a, t, formatInstantDateTime)}
                 </option>
               ))}
             </select>

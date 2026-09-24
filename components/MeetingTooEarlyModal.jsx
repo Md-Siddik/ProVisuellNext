@@ -1,17 +1,14 @@
 "use client"
 
 import { Clock } from "lucide-react"
-import { getLocale } from "@/lib/i18n/locale"
 import { useTranslation } from "@/lib/i18n"
-
-function formatTime(iso) {
-  return new Date(iso).toLocaleString(getLocale(), { dateStyle: "medium", timeStyle: "short" })
-}
+import { useTimeFormat } from "@/context/TimeFormatContext"
 
 // Shown when someone tries to join a meeting before its scheduled start —
 // the Meet link only opens once that time has actually arrived.
 export default function MeetingTooEarlyModal({ start, onClose }) {
   const { t } = useTranslation()
+  const { formatInstantDateTime } = useTimeFormat()
   // Stops the backdrop click from also bubbling up and closing whatever
   // modal this one happens to be nested inside (e.g. the appointment
   // detail modal on the staff calendar).
@@ -31,7 +28,7 @@ export default function MeetingTooEarlyModal({ start, onClose }) {
         </div>
         <h2 className="mt-[16px] text-[18px] font-[800] text-white">{t("meetingTooEarlyModal.title")}</h2>
         <p className="mt-[8px] text-[13.5px] leading-[1.5] text-white/55">
-          {t("meetingTooEarlyModal.description")} <span className="font-[700] text-white">{formatTime(start)}</span>
+          {t("meetingTooEarlyModal.description")} <span className="font-[700] text-white">{formatInstantDateTime(start)}</span> <span className="text-white/40">({t("timeFormat.norwayTime")})</span>
         </p>
         <button
           onClick={onClose}

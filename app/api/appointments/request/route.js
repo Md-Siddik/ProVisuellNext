@@ -3,39 +3,52 @@ import { authenticate, withApiErrors, ApiError } from "@/lib/auth"
 import { Appointment } from "@/lib/models/Appointment"
 import { notifyRole } from "@/lib/notify"
 import { notifyBusiness, sendEmail } from "@/lib/mailer"
+import { bookSlot, bookingFromInstants, slotUnavailable } from "@/lib/appointments/availabilityService"
+import { formatOsloDateTime } from "@/lib/appointments/time"
+
+const MAX_DURATION_MINUTES = 180
 
 // A logged-in customer requests a meeting slot from the marketing site's
 // booking widget. Tied to their account so it shows up under "Mine avtaler".
+//
+// Body: { title, notes, date: "YYYY-MM-DD", time: "HH:MM", durationMinutes? }
+// (Europe/Oslo). The older { start, end } ISO shape is still accepted.
+// Availability is re-resolved on the server and the slots are locked
+// atomically, so a stale list or two simultaneous requests can't double-book.
 export const POST = withApiErrors(async (request) => {
   const { user } = await authenticate(request)
 
-  const { title, start, end, notes } = (await request.json().catch(() => ({}))) || {}
-  if (!title || !start || !end) {
-    throw new ApiError(400, "title, start and end are required")
+  const body = (await request.json().catch(() => ({}))) || {}
+  const { title, notes } = body
+  if (!title) throw new ApiError(400, "title, start and end are required")
+
+  const slot = body.date && body.time
+    ? { date: body.date, time: body.time, durationMinutes: Number(body.durationMinutes) || 30 }
+    : body.start
+      ? bookingFromInstants(body.start, body.end)
+      : null
+  if (!slot) throw new ApiError(400, "title, start and end are required")
+  const { durationMinutes } = slot
+  if (!Number.isInteger(durationMinutes) || durationMinutes < 30 || durationMinutes > MAX_DURATION_MINUTES || durationMinutes % 30 !== 0) {
+    throw slotUnavailable()
   }
 
-  // Re-check the slot is still free server-side — the client only ever
-  // shows open slots, but two people could race for the same one.
-  const overlap = await Appointment.findOne({
-    start: { $lt: new Date(end) },
-    end: { $gt: new Date(start) },
-    status: { $ne: "cancelled" },
-  })
-  if (overlap) {
-    throw new ApiError(409, "Dette tidspunktet er nettopp booket av noen andre. Velg et annet.")
-  }
-
-  const appointment = await Appointment.create({
-    title,
-    start,
-    end,
-    requestedByName: user.name || user.email,
-    requestedByEmail: user.email,
-    requestedBy: user._id,
-    notes: notes || "",
+  const appointment = await bookSlot({
+    ...slot,
+    create: (start, end) =>
+      Appointment.create({
+        title: String(title).slice(0, 200),
+        start,
+        end,
+        requestedByName: user.name || user.email,
+        requestedByEmail: user.email,
+        requestedBy: user._id,
+        notes: notes ? String(notes).slice(0, 2000) : "",
+      }),
   })
 
-  const when = new Date(appointment.start).toLocaleString("no-NO", { dateStyle: "medium", timeStyle: "short" })
+  // Norwegian-language messages, in Norwegian time (not the server's zone).
+  const when = `${formatOsloDateTime(appointment.start, "no-NO", "24h")} (norsk tid)`
   const message = `${appointment.requestedByName} — ${when}`
   notifyRole("owner", {
     type: "appointment_booked",

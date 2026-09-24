@@ -6,6 +6,7 @@ import Link from "next/link"
 import { useAuth } from "@/context/AuthContext"
 import {
   Calendar,
+  CalendarCog,
   CheckCheck,
   ChevronLeft,
   ChevronRight,
@@ -18,7 +19,18 @@ import {
 } from "lucide-react"
 import { api } from "@/lib/api"
 import MeetingTooEarlyModal from "../../components/MeetingTooEarlyModal"
+import TimeFormatToggle from "../../components/appointments/TimeFormatToggle"
 import { useTranslation } from "@/lib/i18n"
+import { useTimeFormat } from "@/context/TimeFormatContext"
+import {
+  addDays,
+  formatDateString,
+  generateDailySlots,
+  getNorwayNow,
+  osloParts,
+  osloToUtc,
+  startOfWeekDate,
+} from "@/lib/appointments/time"
 
 const MEET_LINK = process.env.NEXT_PUBLIC_MEET_LINK || ""
 
@@ -31,28 +43,36 @@ const DAY_LABEL_KEYS = [
   "appointmentsPage.daySat",
   "appointmentsPage.daySun",
 ]
-const START_HOUR = 8
-// Floor, not a ceiling — the grid always extends at least this far, but
-// widens further (see `useEndHour` below) for whatever evening appointments
-// actually exist that week. Admins can book a meeting at any time via
-// NewMeetingModal's plain time input, so 18:00 was never a real limit.
+// The calendar is laid out in Norway time (Europe/Oslo), whatever timezone
+// the viewer's browser is in, so it lines up with booking availability.
+//
+// Floors, not limits — the grid always spans at least 08:00–18:00, and
+// widens to fit whatever early-morning or late-evening appointments
+// actually exist that week (customers can book any of the 48 daily slots).
+const MIN_START_HOUR = 8
 const MIN_END_HOUR = 18
 const ROW_HEIGHT = 84 // px per hour, must match the h-[84px] rows below — tall enough that even a 30-min slot fits a title + time line
 
-// The grid must be tall enough to hold every appointment that week,
-// however late it runs — never a fixed cutoff that clips evening bookings.
-function useEndHour(appointments) {
+// Staff can pick quarter hours for internal meetings.
+const QUARTER_HOURS = generateDailySlots({ intervalMinutes: 15 })
+
+function useHourRange(appointments) {
   return useMemo(() => {
+    let start = MIN_START_HOUR
     let end = MIN_END_HOUR
     for (const appt of appointments) {
       if (appt.status === "cancelled") continue
-      const finish = new Date(appt.end)
-      if (Number.isNaN(finish.getTime())) continue
-      let hour = finish.getHours()
-      if (finish.getMinutes() > 0) hour += 1
+      const s = new Date(appt.start)
+      const e = new Date(appt.end)
+      if (Number.isNaN(s.getTime()) || Number.isNaN(e.getTime())) continue
+      const sp = osloParts(s)
+      const ep = osloParts(e)
+      if (sp.hour < start) start = sp.hour
+      // A meeting ending after midnight Oslo time fills the rest of its day.
+      const hour = ep.date !== sp.date ? 24 : ep.hour + (ep.minute > 0 ? 1 : 0)
       if (hour > end) end = hour
     }
-    return Math.min(end, 24)
+    return { startHour: start, endHour: Math.min(end, 24) }
   }, [appointments])
 }
 
@@ -124,19 +144,9 @@ function orderDateInfo(order, t) {
   return { label: t("appointmentsPage.dateOrdered"), value: order.createdAt }
 }
 
-function startOfWeek(date) {
-  const d = new Date(date)
-  const day = (d.getDay() + 6) % 7 // Monday = 0
-  d.setDate(d.getDate() - day)
-  d.setHours(0, 0, 0, 0)
-  return d
-}
-
 function formatDateRange(monday) {
-  const sunday = new Date(monday)
-  sunday.setDate(sunday.getDate() + 6)
-  const fmt = (d) => d.toLocaleDateString(getLocale(), { day: "numeric", month: "short" })
-  return `${fmt(monday)} – ${fmt(sunday)}`
+  const fmt = (d) => formatDateString(d, getLocale(), { day: "numeric", month: "short" })
+  return `${fmt(monday)} – ${fmt(addDays(monday, 6))}`
 }
 
 // scheduled/completed/cancelled is what's persisted — "missed" is derived
@@ -164,6 +174,7 @@ const APPT_STATUS_BADGE = {
 
 function NewMeetingModal({ weekStart, onClose, onCreated }) {
   const { t } = useTranslation()
+  const { formatTime } = useTimeFormat()
   const [title, setTitle] = useState("")
   const [day, setDay] = useState(0)
   const [start, setStart] = useState("09:00")
@@ -175,14 +186,14 @@ function NewMeetingModal({ weekStart, onClose, onCreated }) {
   const handleSubmit = async (e) => {
     e.preventDefault()
     setError("")
-    const date = new Date(weekStart)
-    date.setDate(date.getDate() + Number(day))
-    const [sh, sm] = start.split(":").map(Number)
-    const [eh, em] = end.split(":").map(Number)
-    const startDate = new Date(date)
-    startDate.setHours(sh, sm, 0, 0)
-    const endDate = new Date(date)
-    endDate.setHours(eh, em, 0, 0)
+    // Entered times are Norway time, converted to the exact instant here.
+    const date = addDays(weekStart, Number(day))
+    const startDate = osloToUtc(date, start)
+    const endDate = osloToUtc(date, end)
+    if (!startDate || !endDate) {
+      setError(t("appointmentsPage.errorNonexistentTime"))
+      return
+    }
 
     if (endDate <= startDate) {
       setError(t("appointmentsPage.errorEndBeforeStart"))
@@ -213,7 +224,10 @@ function NewMeetingModal({ weekStart, onClose, onCreated }) {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-[18px] flex items-center justify-between">
-          <h2 className="text-[18px] font-[800] text-white">{t("appointmentsPage.newMeetingTitle")}</h2>
+          <div>
+            <h2 className="text-[18px] font-[800] text-white">{t("appointmentsPage.newMeetingTitle")}</h2>
+            <p className="mt-[2px] text-[11.5px] text-white/40">{t("timeFormat.norwayTime")}</p>
+          </div>
           <button onClick={onClose} className="text-white/50 hover:text-white">
             <X size={18} />
           </button>
@@ -239,37 +253,43 @@ function NewMeetingModal({ weekStart, onClose, onCreated }) {
               onChange={(e) => setDay(e.target.value)}
               className="w-full rounded-[8px] border border-white/15 bg-white/[0.04] px-[12px] py-[9px] text-[13px] text-white outline-none focus:border-[#ff4b00]"
             >
-              {DAY_LABEL_KEYS.map((labelKey, i) => {
-                const d = new Date(weekStart)
-                d.setDate(d.getDate() + i)
-                return (
-                  <option key={labelKey} value={i} className="bg-[#111212]">
-                    {t(labelKey)} {d.getDate()}.
-                  </option>
-                )
-              })}
+              {DAY_LABEL_KEYS.map((labelKey, i) => (
+                <option key={labelKey} value={i} className="bg-[#111212]">
+                  {t(labelKey)} {Number(addDays(weekStart, i).slice(8))}.
+                </option>
+              ))}
             </select>
           </div>
           <div className="flex gap-[12px]">
             <div className="flex-1">
               <label className="mb-[6px] block text-[12px] font-[600] text-white/70">{t("appointmentsPage.fromLabel")}</label>
-              <input
-                type="time"
+              <select
                 required
                 value={start}
                 onChange={(e) => setStart(e.target.value)}
-                className="w-full rounded-[8px] border border-white/15 bg-white/[0.04] px-[12px] py-[9px] text-[13px] text-white outline-none focus:border-[#ff4b00]"
-              />
+                className="w-full rounded-[8px] border border-white/15 bg-white/[0.04] px-[12px] py-[9px] text-[13px] tabular-nums text-white outline-none focus:border-[#ff4b00]"
+              >
+                {QUARTER_HOURS.map((q) => (
+                  <option key={q} value={q} className="bg-[#111212]">
+                    {formatTime(q)}
+                  </option>
+                ))}
+              </select>
             </div>
             <div className="flex-1">
               <label className="mb-[6px] block text-[12px] font-[600] text-white/70">{t("appointmentsPage.toLabel")}</label>
-              <input
-                type="time"
+              <select
                 required
                 value={end}
                 onChange={(e) => setEnd(e.target.value)}
-                className="w-full rounded-[8px] border border-white/15 bg-white/[0.04] px-[12px] py-[9px] text-[13px] text-white outline-none focus:border-[#ff4b00]"
-              />
+                className="w-full rounded-[8px] border border-white/15 bg-white/[0.04] px-[12px] py-[9px] text-[13px] tabular-nums text-white outline-none focus:border-[#ff4b00]"
+              >
+                {QUARTER_HOURS.map((q) => (
+                  <option key={q} value={q} className="bg-[#111212]">
+                    {formatTime(q)}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
           <div>
@@ -296,6 +316,7 @@ function NewMeetingModal({ weekStart, onClose, onCreated }) {
 
 function AppointmentDetailModal({ appointment, onClose }) {
   const { t } = useTranslation()
+  const { formatInstantDate, formatInstantTime } = useTimeFormat()
   const isPublicRequest = !appointment.createdBy
   const displayStatus = appointmentDisplayStatus(appointment)
   const order = appointment.linkedOrder
@@ -352,8 +373,10 @@ function AppointmentDetailModal({ appointment, onClose }) {
         <div className="mt-[16px] space-y-[10px] text-[13px] text-white/75">
           <p className="flex items-center gap-[10px]">
             <Clock size={15} className="shrink-0 text-white/40" />
-            {new Date(appointment.start).toLocaleString(getLocale(), { dateStyle: "full", timeStyle: "short" })} –{" "}
-            {new Date(appointment.end).toLocaleTimeString(getLocale(), { hour: "2-digit", minute: "2-digit" })}
+            <span className="tabular-nums">
+              {formatInstantDate(appointment.start, { dateStyle: "full" })} {formatInstantTime(appointment.start)} – {formatInstantTime(appointment.end)}
+              <span className="text-white/40"> · {t("timeFormat.norwayTime")}</span>
+            </span>
           </p>
           <p className="flex items-center gap-[10px]">
             <Mail size={15} className="shrink-0 text-white/40" />
@@ -459,7 +482,11 @@ function OrderDetailModal({ order, onClose }) {
 
 export default function Ansattmoter() {
   const { t } = useTranslation()
-  const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()))
+  const { role } = useAuth()
+  const { formatTime, formatInstantTime } = useTimeFormat()
+  const base = role === "owner" ? "/dashboard/owner" : "/dashboard/admin"
+  // Monday of the shown week, as an Oslo calendar date ("YYYY-MM-DD").
+  const [weekStart, setWeekStart] = useState(() => startOfWeekDate(getNorwayNow().date))
   const [appointments, setAppointments] = useState([])
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
@@ -468,16 +495,13 @@ export default function Ansattmoter() {
   const [selectedOrder, setSelectedOrder] = useState(null)
   const [error, setError] = useState("")
 
-  const weekEnd = useMemo(() => {
-    const d = new Date(weekStart)
-    d.setDate(d.getDate() + 7)
-    return d
-  }, [weekStart])
+  const weekDates = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart])
+  const todayOslo = getNorwayNow().date
 
-  const endHour = useEndHour(appointments)
+  const { startHour, endHour } = useHourRange(appointments)
   const HOURS = useMemo(
-    () => Array.from({ length: endHour - START_HOUR + 1 }, (_, i) => START_HOUR + i),
-    [endHour]
+    () => Array.from({ length: endHour - startHour }, (_, i) => startHour + i),
+    [startHour, endHour]
   )
 
   useEffect(() => {
@@ -486,9 +510,11 @@ export default function Ansattmoter() {
       setLoading(true)
       setError("")
       try {
+        const from = osloToUtc(weekStart, "00:00").toISOString()
+        const to = osloToUtc(addDays(weekStart, 7), "00:00").toISOString()
         const [apptData, orderData] = await Promise.all([
-          api.get(`/appointments?from=${weekStart.toISOString()}&to=${weekEnd.toISOString()}`),
-          api.get(`/orders?deliveryFrom=${weekStart.toISOString()}&deliveryTo=${weekEnd.toISOString()}&limit=100`),
+          api.get(`/appointments?from=${from}&to=${to}`),
+          api.get(`/orders?deliveryFrom=${from}&deliveryTo=${to}&limit=100`),
         ])
         if (!cancelled) {
           setAppointments(apptData.appointments)
@@ -504,18 +530,17 @@ export default function Ansattmoter() {
     return () => {
       cancelled = true
     }
-  }, [weekStart, weekEnd])
+  }, [weekStart])
 
   const byDay = useMemo(() => {
     const map = Array.from({ length: 7 }, () => [])
     for (const appt of appointments) {
       if (appt.status === "cancelled") continue
-      const start = new Date(appt.start)
-      const dayIndex = (start.getDay() + 6) % 7
-      map[dayIndex].push(appt)
+      const dayIndex = weekDates.indexOf(osloParts(appt.start).date)
+      if (dayIndex >= 0) map[dayIndex].push(appt)
     }
     return map
-  }, [appointments])
+  }, [appointments, weekDates])
 
   const ordersByDay = useMemo(() => {
     const map = Array.from({ length: 7 }, () => [])
@@ -527,16 +552,17 @@ export default function Ansattmoter() {
       if (!relevantDate) continue
       const d = new Date(relevantDate)
       if (Number.isNaN(d.getTime())) continue
-      const dayIndex = (d.getDay() + 6) % 7
-      map[dayIndex].push(order)
+      const dayIndex = weekDates.indexOf(osloParts(d).date)
+      if (dayIndex >= 0) map[dayIndex].push(order)
     }
     return map
-  }, [orders])
+  }, [orders, weekDates])
 
   const eventStyle = (appt) => {
     const start = new Date(appt.start)
     const end = new Date(appt.end)
-    const startMinutes = (start.getHours() - START_HOUR) * 60 + start.getMinutes()
+    const p = osloParts(start)
+    const startMinutes = (p.hour - startHour) * 60 + p.minute
     const durationMinutes = Math.max((end - start) / 60000, 20)
     return {
       top: `${(startMinutes / 60) * ROW_HEIGHT}px`,
@@ -553,13 +579,22 @@ export default function Ansattmoter() {
             {t("appointmentsPage.subtitle")}
           </p>
         </div>
-        <button
-          onClick={() => setShowModal(true)}
-          className="inline-flex items-center gap-[8px] rounded-[10px] bg-[#ff4b00] px-[16px] py-[10px] text-[13px] font-[800] uppercase tracking-[0.02em] text-white hover:brightness-110"
-        >
-          <Plus size={15} />
-          {t("appointmentsPage.newMeetingTitle")}
-        </button>
+        <div className="flex flex-wrap items-center gap-[10px]">
+          <Link
+            href={`${base}/motetilgjengelighet`}
+            className="inline-flex items-center gap-[8px] rounded-[10px] border border-white/15 px-[14px] py-[10px] text-[13px] font-[700] text-white/80 hover:bg-white/[0.06]"
+          >
+            <CalendarCog size={15} />
+            {t("availabilityPage.navLabel")}
+          </Link>
+          <button
+            onClick={() => setShowModal(true)}
+            className="inline-flex items-center gap-[8px] rounded-[10px] bg-[#ff4b00] px-[16px] py-[10px] text-[13px] font-[800] uppercase tracking-[0.02em] text-white hover:brightness-110"
+          >
+            <Plus size={15} />
+            {t("appointmentsPage.newMeetingTitle")}
+          </button>
+        </div>
       </div>
 
       <div className="mt-[14px] flex flex-wrap items-center gap-[18px] text-[12px] text-white/50">
@@ -595,47 +630,49 @@ export default function Ansattmoter() {
 
       <div className="mt-[20px] flex items-center gap-[10px]">
         <button
-          onClick={() => setWeekStart((d) => new Date(d.getTime() - 7 * 86400000))}
+          onClick={() => setWeekStart((d) => addDays(d, -7))}
           className="flex h-[34px] w-[34px] items-center justify-center rounded-[8px] border border-white/15 text-white/70 hover:bg-white/[0.06]"
         >
           <ChevronLeft size={16} />
         </button>
         <span className="min-w-[160px] text-[14px] font-[700] text-white">{formatDateRange(weekStart)}</span>
         <button
-          onClick={() => setWeekStart((d) => new Date(d.getTime() + 7 * 86400000))}
+          onClick={() => setWeekStart((d) => addDays(d, 7))}
           className="flex h-[34px] w-[34px] items-center justify-center rounded-[8px] border border-white/15 text-white/70 hover:bg-white/[0.06]"
         >
           <ChevronRight size={16} />
         </button>
         <button
-          onClick={() => setWeekStart(startOfWeek(new Date()))}
+          onClick={() => setWeekStart(startOfWeekDate(getNorwayNow().date))}
           className="rounded-[8px] border border-white/15 px-[14px] py-[8px] text-[13px] font-[600] text-white/70 hover:bg-white/[0.06]"
         >
           {t("appointmentsPage.todayButton")}
         </button>
+        <span className="ml-auto flex items-center gap-[12px]">
+          <span className="hidden text-[12px] text-white/40 sm:inline">{t("timeFormat.norwayTime")}</span>
+          <TimeFormatToggle showLabel={false} />
+        </span>
       </div>
 
       {error && <p className="mt-[14px] rounded-[8px] bg-red-500/10 px-[12px] py-[8px] text-[13px] text-red-300">{error}</p>}
 
       <div className="mt-[18px] overflow-x-auto rounded-[14px] border border-white/[0.08] bg-[#111212]">
         <div className="min-w-[760px]">
-          <div className="grid grid-cols-[56px_repeat(7,1fr)] border-b border-white/[0.08]">
+          <div className="grid grid-cols-[64px_repeat(7,1fr)] border-b border-white/[0.08]">
             <div />
             {DAY_LABEL_KEYS.map((labelKey, i) => {
-              const d = new Date(weekStart)
-              d.setDate(d.getDate() + i)
-              const isToday = d.toDateString() === new Date().toDateString()
+              const isToday = weekDates[i] === todayOslo
               return (
                 <div key={labelKey} className="border-l border-white/[0.08] px-[8px] py-[10px] text-center">
                   <p className="text-[11px] font-[600] uppercase tracking-[0.04em] text-white/45">{t(labelKey)}</p>
-                  <p className={`text-[15px] font-[800] ${isToday ? "text-[#ff4b00]" : "text-white"}`}>{d.getDate()}</p>
+                  <p className={`text-[15px] font-[800] ${isToday ? "text-[#ff4b00]" : "text-white"}`}>{Number(weekDates[i].slice(8))}</p>
                 </div>
               )
             })}
           </div>
 
           {ordersByDay.some((d) => d.length > 0) && (
-            <div className="grid grid-cols-[56px_repeat(7,1fr)] border-b border-white/[0.08] bg-white/[0.012]">
+            <div className="grid grid-cols-[64px_repeat(7,1fr)] border-b border-white/[0.08] bg-white/[0.012]">
               <div className="flex items-center justify-end px-[8px] py-[8px] text-[10px] text-white/30">
                 <Calendar size={13} />
               </div>
@@ -665,11 +702,11 @@ export default function Ansattmoter() {
           )}
 
           <div className="relative max-h-[70vh] overflow-y-auto">
-          <div className="relative grid grid-cols-[56px_repeat(7,1fr)]">
+          <div className="relative grid grid-cols-[64px_repeat(7,1fr)]">
             <div>
               {HOURS.map((h) => (
-                <div key={h} style={{ height: ROW_HEIGHT }} className="border-b border-white/[0.06] px-[8px] pt-[4px] text-right text-[11px] text-white/35">
-                  {String(h).padStart(2, "0")}:00
+                <div key={h} style={{ height: ROW_HEIGHT }} className="border-b border-white/[0.06] px-[6px] pt-[4px] text-right text-[10.5px] tabular-nums text-white/35">
+                  {formatTime(`${String(h).padStart(2, "0")}:00`)}
                 </div>
               ))}
             </div>
@@ -723,8 +760,7 @@ export default function Ansattmoter() {
                           </>
                         ) : (
                           <>
-                            {new Date(appt.start).toLocaleTimeString(getLocale(), { hour: "2-digit", minute: "2-digit" })}–
-                            {new Date(appt.end).toLocaleTimeString(getLocale(), { hour: "2-digit", minute: "2-digit" })}
+                            {formatInstantTime(appt.start)}–{formatInstantTime(appt.end)}
                             {displayStatus === "missed" && ` · ${t("appointmentsPage.apptStatusMissed")}`}
                           </>
                         )}

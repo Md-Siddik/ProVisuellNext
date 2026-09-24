@@ -5,6 +5,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
   CalendarClock,
+  CalendarCog,
   ClipboardList,
   CreditCard,
   FilePlus2,
@@ -35,6 +36,7 @@ function navItemsFor(t, role, base) {
     { to: "/", end: true, label: t("nav.home"), icon: Home },
     { to: `${base}`, end: true, label: t("nav.dashboard"), icon: LayoutDashboard },
     { to: `${base}/ansattmoter`, label: t("nav.appointments"), icon: CalendarClock },
+    { to: `${base}/motetilgjengelighet`, label: t("nav.meetingAvailability"), icon: CalendarCog },
     { to: `${base}/meldinger`, label: t("nav.messages"), icon: MessageSquare },
   ]
   items.push({ to: `${base}/ordre/ny`, label: t("nav.newOrder"), icon: FilePlus2 })

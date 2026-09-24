@@ -8,7 +8,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "set-role": "node scripts/setRole.mjs"
+    "set-role": "node scripts/setRole.mjs",
+    "test": "node --test tests/availability.test.mjs",
+    "test:db": "node --test --test-concurrency=1 tests/booking.db.test.mjs"
   },
   "dependencies": {
     "firebase": "^12.18.0",

@@ -8,6 +8,8 @@ import { api } from "@/lib/api"
 import MeetingTooEarlyModal from "@/components/MeetingTooEarlyModal"
 import { useTranslation } from "@/lib/i18n"
 import ProtectedRoute from "@/context/ProtectedRoute"
+import { useTimeFormat } from "@/context/TimeFormatContext"
+import TimeFormatToggle from "@/components/appointments/TimeFormatToggle"
 
 const STATUS_STYLE = {
   pending: "border-violet-500/40 text-violet-400",
@@ -17,10 +19,6 @@ const STATUS_STYLE = {
 }
 
 const MEET_LINK = process.env.NEXT_PUBLIC_MEET_LINK || ""
-
-function formatDateTime(iso) {
-  return new Date(iso).toLocaleString(getLocale(), { dateStyle: "medium", timeStyle: "short" })
-}
 
 function formatDate(iso) {
   const d = new Date(iso)
@@ -50,6 +48,7 @@ function orderDateInfo(order, t) {
 
 function MineBestillinger() {
   const { t } = useTranslation()
+  const { formatInstantDateTime, formatInstantTime } = useTimeFormat()
   const [orders, setOrders] = useState([])
   const [loadingOrders, setLoadingOrders] = useState(true)
   const [orderIdsWithLocation, setOrderIdsWithLocation] = useState(new Set())
@@ -176,8 +175,13 @@ function MineBestillinger() {
           })}
         </div>
 
-        <h2 className="mt-[40px] text-[20px] font-[800] tracking-[-0.02em] text-white">{t("myOrdersPage.myAppointments")}</h2>
-        <p className="mt-[4px] text-[14px] text-white/50">{t("myOrdersPage.appointmentsSubtitle")}</p>
+        <div className="mt-[40px] flex flex-wrap items-end justify-between gap-[12px]">
+          <div>
+            <h2 className="text-[20px] font-[800] tracking-[-0.02em] text-white">{t("myOrdersPage.myAppointments")}</h2>
+            <p className="mt-[4px] text-[14px] text-white/50">{t("myOrdersPage.appointmentsSubtitle")}</p>
+          </div>
+          <TimeFormatToggle />
+        </div>
 
         <div className="mt-[18px] space-y-[12px]">
           {loadingAppointments && <p className="text-[13px] text-white/40">{t("myOrdersPage.loadingAppointments")}</p>}
@@ -194,7 +198,9 @@ function MineBestillinger() {
                 </span>
                 <div>
                   <p className="text-[14px] font-[700] text-white">{a.title}</p>
-                  <p className="mt-[2px] text-[13px] text-white/50">{formatDateTime(a.start)}</p>
+                  <p className="mt-[2px] text-[13px] tabular-nums text-white/50">
+                    {formatInstantDateTime(a.start)}–{formatInstantTime(a.end)} · {t("timeFormat.norwayTime")}
+                  </p>
                 </div>
               </div>
               {a.status === "cancelled" ? (

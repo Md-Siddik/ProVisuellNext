@@ -13,6 +13,23 @@ function isPasswordAccount(fbUser) {
   return Boolean(fbUser?.providerData?.some((p) => p.providerId === "password"))
 }
 
+// Accounts created through our own signup link (/api/auth/signup) stay
+// "unverified" in Firebase — the server knows they were confirmed and says
+// so by answering /auth/sync. A 403 "Email not verified" is its "no".
+async function syncProfile(fbUser) {
+  try {
+    const { user } = await api.post("/auth/sync", {
+      name: fbUser.displayName || "",
+      phone: fbUser.phoneNumber || "",
+    })
+    return { profile: user, verified: true }
+  } catch (err) {
+    if (err.rawMessage === "Email not verified") return { profile: null, verified: false }
+    console.error("Failed to sync user profile:", err.message)
+    return { profile: null, verified: !isPasswordAccount(fbUser) || fbUser.emailVerified }
+  }
+}
+
 export function AuthProvider({ children }) {
   const [firebaseUser, setFirebaseUser] = useState(null)
   const [profile, setProfile] = useState(null) // Mongo user doc (has .role)
@@ -37,27 +54,12 @@ export function AuthProvider({ children }) {
         return
       }
 
-      const verified = !isPasswordAccount(fbUser) || fbUser.emailVerified
+      const { profile: synced, verified } = await syncProfile(fbUser)
+      if (!active) return
+      // An unconfirmed password account never gets a profile or normal access.
       setEmailVerified(verified)
-      if (!verified) {
-        // Password account pending email confirmation — never create/sync
-        // the application profile, and never grant normal access.
-        setProfile(null)
-        setLoading(false)
-        return
-      }
-
-      try {
-        const { user } = await api.post("/auth/sync", {
-          name: fbUser.displayName || "",
-          phone: fbUser.phoneNumber || "",
-        })
-        if (active) setProfile(user)
-      } catch (err) {
-        console.error("Failed to sync user profile:", err.message)
-        if (active) setProfile(null)
-      }
-      if (active) setLoading(false)
+      setProfile(verified ? synced : null)
+      setLoading(false)
     }
 
     const unsubscribe = onAuthStateChanged(auth, (fbUser) => {
@@ -82,30 +84,22 @@ export function AuthProvider({ children }) {
     setProfile(user)
   }, [])
 
-  // Re-reads the Firebase user (e.g. after the visitor clicks the email
-  // verification link in another tab and comes back) and, once verified,
-  // syncs the application profile. Returns whether the account is verified.
-  // Used by the "I have verified, check again" button.
+  // Re-reads the Firebase user (e.g. after the visitor clicks Firebase's
+  // verification link in another tab and comes back) and asks the server
+  // again. Returns whether the account is verified. Used by the "I have
+  // verified, check again" button.
   const recheckEmailVerification = useCallback(async () => {
     if (!auth.currentUser) return false
     await auth.currentUser.reload()
     const fresh = auth.currentUser
-    const verified = !isPasswordAccount(fresh) || fresh.emailVerified
+    // Force a new ID token so the server sees the updated email_verified claim.
+    await fresh.getIdToken(true)
     setFirebaseUser(fresh)
+    setLoading(true)
+    const { profile: synced, verified } = await syncProfile(fresh)
     setEmailVerified(verified)
-    if (verified) {
-      setLoading(true)
-      try {
-        const { user } = await api.post("/auth/sync", {
-          name: fresh.displayName || "",
-          phone: fresh.phoneNumber || "",
-        })
-        setProfile(user)
-      } catch (err) {
-        console.error("Failed to sync user profile:", err.message)
-      }
-      setLoading(false)
-    }
+    setProfile(verified ? synced : null)
+    setLoading(false)
     return verified
   }, [])
 

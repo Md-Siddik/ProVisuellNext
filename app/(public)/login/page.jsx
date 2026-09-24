@@ -15,7 +15,9 @@ const MICROSOFT_ENABLED = false
 
 function LoginForm() {
   const { t } = useTranslation()
-  const [email, setEmail] = useState("")
+  const searchParams = useSearchParams()
+  // Prefilled when arriving from a just-confirmed signup link.
+  const [email, setEmail] = useState(() => searchParams.get("email") || "")
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
   const [remember, setRemember] = useState(false)
@@ -25,7 +27,6 @@ function LoginForm() {
   const [awaitingProfile, setAwaitingProfile] = useState(false)
 
   const router = useRouter()
-  const searchParams = useSearchParams()
   const redirectTo = searchParams.get("from") || "/dashboard"
   const { loading, isAuthenticated, needsEmailVerification } = useAuth()
 

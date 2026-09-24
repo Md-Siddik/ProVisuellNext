@@ -138,8 +138,8 @@ export function FeaturedCard({ post }) {
   const { t } = useTranslation()
   const href = `/blog/${post.slug}`
   return (
-    <article className="group relative grid overflow-hidden rounded-[24px] border border-white/[0.09] bg-[#111212] transition duration-300 hover:border-white/20 lg:grid-cols-[1.25fr_1fr]">
-      <div className="relative aspect-[16/10] overflow-hidden bg-[#0d0e0e] lg:aspect-auto lg:min-h-[440px]">
+    <article className="group relative grid overflow-hidden rounded-[24px] border border-white/[0.09] bg-[#111212] transition duration-300 hover:border-white/20 xl:grid-cols-[1.2fr_1fr]">
+      <div className="relative aspect-[16/10] overflow-hidden bg-[#0d0e0e] xl:aspect-auto xl:min-h-[400px]">
         {post.coverImage ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -153,12 +153,12 @@ export function FeaturedCard({ post }) {
         )}
         {post.hasVideo && <VideoBadge label={t("blog.video")} />}
       </div>
-      <div className="flex flex-col justify-center p-[24px] sm:p-[36px] lg:p-[44px]">
+      <div className="flex flex-col justify-center p-[24px] sm:p-[36px] xl:p-[40px]">
         <div className="mb-[14px] flex flex-wrap items-center gap-[10px]">
           <span className="rounded-full bg-[#ff4b00] px-[11px] py-[4px] text-[10.5px] font-[800] uppercase tracking-[0.08em] text-white">{t("blog.featured")}</span>
           {post.category && <span className="text-[11px] font-[800] uppercase tracking-[0.08em] text-[#ff4b00]">{post.category.name}</span>}
         </div>
-        <h2 className="text-[28px] font-[800] leading-[1.12] tracking-[-0.025em] text-white sm:text-[36px] lg:text-[40px]">
+        <h2 className="text-[28px] font-[800] leading-[1.12] tracking-[-0.025em] text-white sm:text-[34px] xl:text-[36px]">
           <Link href={href} className="after:absolute after:inset-0 after:content-[''] focus-visible:outline-none">
             {post.title}
           </Link>

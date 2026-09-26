@@ -3,8 +3,10 @@
 import { useEffect, useState } from "react"
 import { CalendarClock, Mail, MessageSquare, X } from "lucide-react"
 import { useAuth } from "@/context/AuthContext"
-import BookMeetingModal from "./BookMeetingModal"
-import EmailComposeModal from "./EmailComposeModal"
+import dynamic from "next/dynamic"
+// Loaded when first opened, not with every public page.
+const BookMeetingModal = dynamic(() => import("./BookMeetingModal"), { ssr: false })
+const EmailComposeModal = dynamic(() => import("./EmailComposeModal"), { ssr: false })
 import LoginRequiredModal from "./LoginRequiredModal"
 import { useTranslation } from "@/lib/i18n"
 

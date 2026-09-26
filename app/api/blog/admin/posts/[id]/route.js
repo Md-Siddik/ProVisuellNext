@@ -7,7 +7,7 @@ import { BlogPost } from "@/lib/models/BlogPost"
 // The full editable document (any status) for the post editor.
 export const GET = withApiErrors(async (request, { params }) => {
   const { id } = await params
-  await requireBlogAdmin(request)
+  await requireBlogAdmin(request, "blog.view")
   assertObjectId(id)
   const p = await BlogPost.findById(id).select("-plainText").lean()
   if (!p) throw new ApiError(404, "Not found")

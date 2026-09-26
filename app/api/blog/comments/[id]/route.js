@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { ApiError, authenticate, withApiErrors } from "@/lib/auth"
-import { isBlogAdmin } from "@/lib/blog/access"
+import { isCommentModerator } from "@/lib/blog/access"
 import { COMMENT_MAX_LENGTH, serializeComment } from "@/lib/blog/comments"
 import { assertObjectId, recountComments } from "@/lib/blog/mutations"
 import { cleanCommentText } from "@/lib/blog/sanitize"
@@ -12,12 +12,13 @@ const STATUSES = ["approved", "pending", "hidden", "spam"]
 // text of their own comment. Everyone else gets 403.
 export const PATCH = withApiErrors(async (request, { params }) => {
   const { id } = await params
-  const { user } = await authenticate(request)
+  const auth = await authenticate(request)
+  const { user } = auth
   assertObjectId(id)
   const comment = await BlogComment.findById(id)
   if (!comment) throw new ApiError(404, "Not found")
 
-  const staff = isBlogAdmin(user)
+  const staff = isCommentModerator(auth)
   const mine = String(comment.user) === String(user._id)
   const payload = await request.json().catch(() => ({}))
 
@@ -45,11 +46,12 @@ export const PATCH = withApiErrors(async (request, { params }) => {
 
 export const DELETE = withApiErrors(async (request, { params }) => {
   const { id } = await params
-  const { user } = await authenticate(request)
+  const auth = await authenticate(request)
+  const { user } = auth
   assertObjectId(id)
   const comment = await BlogComment.findById(id)
   if (!comment) throw new ApiError(404, "Not found")
-  if (!isBlogAdmin(user) && String(comment.user) !== String(user._id)) throw new ApiError(403, "Not allowed for your role")
+  if (!isCommentModerator(auth) && String(comment.user) !== String(user._id)) throw new ApiError(403, "Not allowed for your role")
   await BlogComment.deleteMany({ $or: [{ _id: comment._id }, { parent: comment._id }] })
   await recountComments(comment.post)
   return new Response(null, { status: 204 })

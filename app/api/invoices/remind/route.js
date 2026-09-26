@@ -1,9 +1,13 @@
 import { NextResponse } from "next/server"
-import { authenticate, requireRole, withApiErrors, ApiError } from "@/lib/auth"
+import { authenticate, withApiErrors, ApiError } from "@/lib/auth"
+import { requirePermission } from "@/lib/access"
 import { Invoice } from "@/lib/models/Invoice"
 import { notifyUser } from "@/lib/notify"
 import { createStatementInvoice } from "@/lib/invoicing"
 import { sendEmail } from "@/lib/mailer"
+import { renderInvoiceEmail } from "@/lib/invoices/email"
+import { User } from "@/lib/models/User"
+import { DATE_LOCALES, pickLanguage, translator } from "@/lib/i18n/server"
 
 // Rolls every due invoice for a customer into one real statement invoice
 // (see createStatementInvoice) and sends that — not just a text summary —
@@ -11,10 +15,9 @@ import { sendEmail } from "@/lib/mailer"
 // "Fakturer"/"Vis faktura" buttons and the [id]/send route, which are
 // unchanged.
 export const POST = withApiErrors(async (request) => {
-  const { user } = await authenticate(request)
-  requireRole(user, ["administrator", "owner"])
+  const { user } = requirePermission(await authenticate(request), "invoices.send")
 
-  const { invoiceIds, customerId, customerEmail, customerName } = (await request.json().catch(() => ({}))) || {}
+  const { invoiceIds, customerId, customerEmail, customerName, lang } = (await request.json().catch(() => ({}))) || {}
   if (!Array.isArray(invoiceIds) || invoiceIds.length === 0) {
     throw new ApiError(400, "invoiceIds is required")
   }
@@ -40,13 +43,33 @@ export const POST = withApiErrors(async (request) => {
   })
 
   if (customerEmail) {
-    const lines = invoices
-      .map((inv) => `- ${inv.invoiceNumber}: kr ${inv.grandTotal.toFixed(2)} (forfaller ${inv.dueDate.toLocaleDateString("no-NO")})`)
-      .join("\n")
+    // The statement goes out as a full invoice too, with the list of what it
+    // covers — in the customer's saved language (else the sender's).
+    const customer = customerId ? await User.findById(customerId).select("language").lean().catch(() => null) : null
+    const language = pickLanguage(customer?.language, lang)
+    const t = translator(language)
+    const kr = (n) => `kr ${Number(n).toFixed(2)}`
+    const list = invoices
+      .map((inv) =>
+        t("invoiceEmail.remindLine", {
+          number: inv.invoiceNumber,
+          amount: kr(Math.max(0, inv.grandTotal - (inv.amountPaid || 0))),
+          date: inv.dueDate.toLocaleDateString(DATE_LOCALES[language], { timeZone: "Europe/Oslo" }),
+        })
+      )
+      .map((l) => l.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]))
+      .join("<br>")
+    const base = (process.env.CLIENT_URL || new URL(request.url).origin).replace(/\/$/, "")
+    const email = renderInvoiceEmail(statement, {
+      viewUrl: `${base}/faktura/${statement._id}`,
+      lang: language,
+      intro: `${t(plural ? "invoiceEmail.remindIntroMany" : "invoiceEmail.remindIntroOne", { n: invoices.length, amount: kr(totalDue), number: statement.invoiceNumber })}<br><br>${list}`,
+    })
     await sendEmail({
       to: customerEmail,
-      subject: `Påminnelse: ${invoices.length} ubetalt${plural ? "e" : ""} faktura${plural ? "er" : ""} fra ProVisuell`,
-      text: `Hei ${customerName || ""},\n\nDu har ${invoices.length} ubetalt${plural ? "e" : ""} faktura${plural ? "er" : ""} hos ProVisuell, til sammen kr ${totalDue.toFixed(2)}:\n\n${lines}\n\nVi har samlet dette i én faktura (${statement.invoiceNumber}) som du finner her: ${process.env.CLIENT_URL || ""}/faktura/${statement._id}\n\nVennligst betal snarest mulig.\n\nMvh ProVisuell`,
+      subject: t(plural ? "invoiceEmail.remindSubjectMany" : "invoiceEmail.remindSubjectOne", { n: invoices.length }),
+      html: email.html,
+      text: email.text,
     })
   }
 

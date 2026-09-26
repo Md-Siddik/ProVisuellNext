@@ -9,7 +9,7 @@ import { BlogCategory } from "@/lib/models/BlogCategory"
 export const GET = withApiErrors(async () => NextResponse.json({ categories: await getPublicCategories() }))
 
 export const POST = withApiErrors(async (request) => {
-  await requireBlogAdmin(request)
+  await requireBlogAdmin(request, "blog.create", "blog.edit")
   const body = (await request.json().catch(() => ({}))) || {}
   const name = String(body.name || "").trim().slice(0, 80)
   if (!name) throw new ApiError(400, "Name is required")

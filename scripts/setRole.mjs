@@ -17,11 +17,11 @@ dns.setServers(["8.8.8.8", "1.1.1.1"])
 const [, , email, role] = process.argv
 
 if (!email || !role) {
-  console.error("Usage: npm run set-role -- <email> <owner|administrator|customer>")
+  console.error("Usage: npm run set-role -- <email> <owner|administrator|moderator|customer>")
   process.exit(1)
 }
-if (!["owner", "administrator", "customer"].includes(role)) {
-  console.error("role must be one of: owner, administrator, customer")
+if (!["owner", "administrator", "moderator", "customer"].includes(role)) {
+  console.error("role must be one of: owner, administrator, moderator, customer")
   process.exit(1)
 }
 

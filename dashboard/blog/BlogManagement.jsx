@@ -17,6 +17,7 @@ import {
 } from "lucide-react"
 import { api } from "@/lib/api"
 import { useTranslation } from "@/lib/i18n"
+import { useAuth } from "@/context/AuthContext"
 import { btnPrimary } from "./adminUi"
 import PostsList from "./PostsList"
 import PostEditor from "./PostEditor"
@@ -32,19 +33,21 @@ import { Analytics, Overview } from "./OverviewAnalytics"
 const SECTIONS = [
   { id: "overview", icon: LayoutDashboard, label: "blogAdmin.nav.overview" },
   { id: "posts", icon: FileText, label: "blogAdmin.nav.posts" },
-  { id: "create", icon: PenSquare, label: "blogAdmin.nav.create", action: true },
+  { id: "create", icon: PenSquare, label: "blogAdmin.nav.create", action: true, need: "blog.create" },
   { id: "drafts", icon: FileEdit, label: "blogAdmin.nav.drafts" },
   { id: "published", icon: Globe, label: "blogAdmin.nav.published" },
-  { id: "categories", icon: FolderTree, label: "blogAdmin.nav.categories" },
-  { id: "tags", icon: Tags, label: "blogAdmin.nav.tags" },
-  { id: "comments", icon: MessageCircle, label: "blogAdmin.nav.comments" },
+  { id: "categories", icon: FolderTree, label: "blogAdmin.nav.categories", need: "blog.edit" },
+  { id: "tags", icon: Tags, label: "blogAdmin.nav.tags", need: "blog.edit" },
+  { id: "comments", icon: MessageCircle, label: "blogAdmin.nav.comments", need: "blog.moderateComments" },
   { id: "media", icon: ImageIcon, label: "blogAdmin.nav.media" },
-  { id: "analytics", icon: ChartColumn, label: "blogAdmin.nav.analytics" },
-  { id: "settings", icon: Settings, label: "blogAdmin.nav.settings" },
+  { id: "analytics", icon: ChartColumn, label: "blogAdmin.nav.analytics", need: "blog.analytics" },
+  { id: "settings", icon: Settings, label: "blogAdmin.nav.settings", need: "blog.settings" },
 ]
 
 export default function BlogManagement() {
   const { t } = useTranslation()
+  const { can } = useAuth()
+  const sections = SECTIONS.filter((s) => !s.need || can(s.need))
   const [section, setSection] = useState("overview")
   // null = not editing; { id: null } = new post; { id: "…" } = existing post.
   const [editing, setEditing] = useState(null)
@@ -78,7 +81,7 @@ export default function BlogManagement() {
           <h1 className="text-[26px] font-[800] tracking-[-0.02em] text-white">{t("nav.blogManagement")}</h1>
           <p className="mt-[4px] text-[14px] text-white/50">{t("blogAdmin.subtitle")}</p>
         </div>
-        {!editing && (
+        {!editing && can("blog.create") && (
           <button type="button" onClick={openCreate} className={btnPrimary}>
             <Plus size={15} />
             {t("blogAdmin.createPost")}
@@ -88,7 +91,7 @@ export default function BlogManagement() {
 
       <div className="mt-[20px] grid gap-[16px] lg:grid-cols-[210px_minmax(0,1fr)]">
         <nav aria-label={t("nav.blogManagement")} className="grid grid-cols-2 gap-[6px] sm:grid-cols-3 lg:sticky lg:top-0 lg:grid-cols-1 lg:self-start">
-          {SECTIONS.map(({ id, icon: Icon, label, action }) => {
+          {sections.map(({ id, icon: Icon, label, action }) => {
             const active = action ? Boolean(editing && editing.id === null) : !editing && section === id
             return (
               <button

@@ -5,8 +5,9 @@ import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Eye, EyeOff, Lock, Mail } from "lucide-react"
 import { useAuth } from "@/context/AuthContext"
-import { friendlyAuthError, loginWithEmail, loginWithGoogle, loginWithMicrosoft, resetPassword } from "@/lib/firebaseAuth"
+import { friendlyAuthError, logAuthError, loginWithEmail, loginWithGoogle, loginWithMicrosoft, resetPassword } from "@/lib/firebaseAuth"
 import { useTranslation } from "@/lib/i18n"
+import GoogleAuthButton from "@/components/auth/GoogleAuthButton"
 
 // Microsoft sign-in is wired up but stays hidden until that OAuth provider
 // is enabled and tested in the Firebase console. Flip this back on when
@@ -25,10 +26,21 @@ function LoginForm() {
   const [info, setInfo] = useState("")
   const [submitting, setSubmitting] = useState(false)
   const [awaitingProfile, setAwaitingProfile] = useState(false)
+  // Which sign-in button is working (popup open or account being checked).
+  const [oauthBusy, setOauthBusy] = useState(null)
 
   const router = useRouter()
   const redirectTo = searchParams.get("from") || "/dashboard"
-  const { loading, isAuthenticated, needsEmailVerification } = useAuth()
+  const { loading, isAuthenticated, needsEmailVerification, accountBlock, clearAccountBlock } = useAuth()
+
+  // The server refused the account (banned): stop waiting for a
+  // profile that will never come and say why.
+  useEffect(() => {
+    if (!accountBlock) return
+    setAwaitingProfile(false)
+    setSubmitting(false)
+    setOauthBusy(null)
+  }, [accountBlock])
 
   // See Signup.jsx for why this waits for `loading` to settle rather than
   // navigating the instant Firebase resolves. A password account that
@@ -44,6 +56,7 @@ function LoginForm() {
     e.preventDefault()
     setError("")
     setInfo("")
+    clearAccountBlock()
     setSubmitting(true)
     try {
       await loginWithEmail(email, password)
@@ -54,16 +67,23 @@ function LoginForm() {
     }
   }
 
+  // Firebase first (popup), then AuthContext checks the account with the
+  // server; the redirect below waits for that. A refused account (banned /
+  // deleted) comes back as accountBlock and is signed out again.
   const handleOAuth = async (provider) => {
     setError("")
+    clearAccountBlock()
     setSubmitting(true)
+    setOauthBusy(provider)
     try {
       if (provider === "google") await loginWithGoogle()
       else await loginWithMicrosoft()
       setAwaitingProfile(true)
     } catch (err) {
+      logAuthError(err)
       setError(friendlyAuthError(err))
       setSubmitting(false)
+      setOauthBusy(null)
     }
   }
 
@@ -91,6 +111,11 @@ function LoginForm() {
             {t("login.subtitle")}
           </p>
 
+          {accountBlock && !error && (
+            <div role="alert" className="mt-[22px] rounded-[10px] border border-red-500/30 bg-red-500/10 px-[14px] py-[10px] text-[13px] text-red-300">
+              {t("login.accountBanned")}
+            </div>
+          )}
           {error && (
             <div className="mt-[22px] rounded-[10px] border border-red-500/30 bg-red-500/10 px-[14px] py-[10px] text-[13px] text-red-300">
               {error}
@@ -164,15 +189,7 @@ function LoginForm() {
           </div>
 
           <div className="mt-[18px] space-y-[10px]">
-            <button
-              type="button"
-              onClick={() => handleOAuth("google")}
-              disabled={submitting}
-              className="flex w-full items-center justify-center gap-[10px] rounded-[10px] border border-white/15 bg-white/[0.03] py-[12px] text-[14px] text-white transition hover:bg-white/[0.07] disabled:opacity-50"
-            >
-              <GoogleIcon />
-              {t("login.continueWithGoogle")}
-            </button>
+            <GoogleAuthButton label={t("login.continueWithGoogle")} onClick={() => handleOAuth("google")} disabled={submitting} busy={oauthBusy === "google"} />
             {MICROSOFT_ENABLED && (
               <button
                 type="button"
@@ -199,17 +216,6 @@ function LoginForm() {
         <img src="/assets/packaging-hero.png" alt="" className="absolute inset-0 h-full w-full object-cover" />
       </div>
     </div>
-  )
-}
-
-function GoogleIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 48 48">
-      <path fill="#EA4335" d="M24 9.5c3.4 0 6.4 1.2 8.8 3.5l6.6-6.6C35.4 2.5 30 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.7 6C12.1 13 17.5 9.5 24 9.5z" />
-      <path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.6c-.5 3-2.2 5.5-4.7 7.2l7.3 5.6c4.2-3.9 6.3-9.7 6.3-17.3z" />
-      <path fill="#FBBC05" d="M10.3 19.2a14.5 14.5 0 0 0 0 9.6l-7.7 6a24 24 0 0 1 0-21.6z" />
-      <path fill="#34A853" d="M24 48c6 0 11.4-2 15.2-5.4l-7.3-5.6c-2 1.4-4.7 2.2-7.9 2.2-6.5 0-12-4.4-13.9-10.4l-7.7 6C6.5 42.6 14.6 48 24 48z" />
-    </svg>
   )
 }
 

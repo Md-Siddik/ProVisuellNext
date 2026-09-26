@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import mongoose from "mongoose"
 import { ApiError, authenticate, withApiErrors } from "@/lib/auth"
-import { identityOf, isBlogAdmin, optionalAuth } from "@/lib/blog/access"
+import { identityOf, isCommentModerator, optionalAuth } from "@/lib/blog/access"
 import { COMMENT_MAX_LENGTH, loadCommentPage, serializeComment } from "@/lib/blog/comments"
 import { getSettings, recountComments } from "@/lib/blog/mutations"
 import { findPublicPost } from "@/lib/blog/queries"
@@ -50,7 +50,7 @@ export const POST = withApiErrors(async (request, { params }) => {
   }
 
   const { requireCommentApproval } = await getSettings()
-  const staff = isBlogAdmin(auth.user)
+  const staff = isCommentModerator(auth)
   const { name, avatar } = identityOf(auth)
   const comment = await BlogComment.create({
     post: post._id,

@@ -1,6 +1,7 @@
 import mongoose from "mongoose"
 import { NextResponse } from "next/server"
-import { ApiError, authenticate, requireRole, withApiErrors } from "@/lib/auth"
+import { ApiError, authenticate, withApiErrors } from "@/lib/auth"
+import { requirePermission } from "@/lib/access"
 import { ContactEmail } from "@/lib/models/ContactEmail"
 import { getBusinessEmail, sendEmail } from "@/lib/mailer"
 
@@ -9,8 +10,7 @@ import { getBusinessEmail, sendEmail } from "@/lib/mailer"
 // inbox) and kept on the record so the thread shows what was answered.
 export const POST = withApiErrors(async (request, { params }) => {
   const { id } = await params
-  const { user } = await authenticate(request)
-  requireRole(user, ["administrator", "owner"])
+  const { user } = requirePermission(await authenticate(request), "messages.sendEmail")
   if (!mongoose.isValidObjectId(id)) throw new ApiError(404, "Not found")
 
   const body = (await request.json().catch(() => ({}))) || {}

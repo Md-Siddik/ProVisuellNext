@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
-import { authenticate, requireRole, withApiErrors } from "@/lib/auth"
+import { authenticate, withApiErrors } from "@/lib/auth"
+import { requirePermission } from "@/lib/access"
 import { CmsItem } from "@/lib/models/CmsItem"
 import { assertValidCollection } from "@/lib/cmsHelpers"
 
@@ -8,8 +9,7 @@ import { assertValidCollection } from "@/lib/cmsHelpers"
 export const GET = withApiErrors(async (request, { params }) => {
   const { collection } = await params
   assertValidCollection(collection)
-  const { user } = await authenticate(request)
-  requireRole(user, ["administrator"])
+  requirePermission(await authenticate(request), "cms.view")
 
   const items = await CmsItem.find({ collectionKey: collection }).sort({ order: 1 })
   return NextResponse.json({ items })

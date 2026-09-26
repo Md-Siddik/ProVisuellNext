@@ -11,7 +11,6 @@ import { BUSINESS_TIMEZONE, SLOT_INTERVAL_MINUTES, formatDateString, getNorwayNo
 import TimeFormatToggle from "./appointments/TimeFormatToggle"
 import AvailabilitySlotGrid from "./appointments/AvailabilitySlotGrid"
 
-const MEET_LINK = process.env.NEXT_PUBLIC_MEET_LINK || ""
 
 export default function BookMeetingModal({ onClose }) {
   const { t } = useTranslation()
@@ -118,11 +117,8 @@ export default function BookMeetingModal({ onClose }) {
               <TimeFormatToggle />
             </div>
             <p className="mt-[12px] text-[13.5px] leading-[1.5] text-white/60">{t("bookMeetingModal.bookedMessage")}</p>
-            {MEET_LINK && (
-              <a href={MEET_LINK} target="_blank" rel="noreferrer" className="mt-[14px] inline-block break-all text-[13px] font-[700] text-[#ff4b00] hover:underline">
-                {MEET_LINK}
-              </a>
-            )}
+            {/* No meeting link here: it's released only when the meeting starts. */}
+            <p className="mt-[10px] text-[12.5px] leading-[1.5] text-white/45">{t("appointmentActions.linkAtStart")}</p>
             <button
               onClick={onClose}
               className="mt-[20px] w-full rounded-[10px] bg-[#ff4b00] py-[11px] text-[13px] font-[800] uppercase tracking-[0.02em] text-white hover:brightness-110"

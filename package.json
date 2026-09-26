@@ -9,8 +9,13 @@
     "start": "next start",
     "lint": "eslint .",
     "set-role": "node scripts/setRole.mjs",
-    "test": "node --test tests/availability.test.mjs",
-    "test:db": "node --test --test-concurrency=1 tests/booking.db.test.mjs"
+    "migrate:notes": "node scripts/migrateNotes.mjs",
+    "test": "node --test tests/availability.test.mjs tests/permissions.test.mjs tests/invoices.test.mjs tests/notes.test.mjs tests/siteContent.test.mjs tests/cookieConsent.test.mjs",
+    "test:db": "node --test --test-concurrency=1 tests/booking.db.test.mjs tests/identity.db.test.mjs",
+    "test:e2e": "node --test --test-concurrency=1 tests/rbac.e2e.test.mjs",
+    "optimize-images": "node scripts/optimizeImages.mjs",
+    "build:e2e": "node scripts/buildE2e.mjs",
+    "migrate:site-content": "node scripts/migrateSiteContent.mjs"
   },
   "dependencies": {
     "firebase": "^12.18.0",

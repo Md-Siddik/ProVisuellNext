@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server"
-import { authenticate, requireRole, withApiErrors } from "@/lib/auth"
+import { authenticate, withApiErrors } from "@/lib/auth"
+import { requirePermission } from "@/lib/access"
 import { Invoice } from "@/lib/models/Invoice"
+import { computeInvoiceStatus, invoiceAmounts } from "@/lib/invoices/status"
 
 // Any status short of actually paid or cancelled still owes money.
 const DUE_STATUSES = ["draft", "issued", "unpaid", "partially_paid", "overdue"]
@@ -10,8 +12,7 @@ const DUE_STATUSES = ["draft", "issued", "unpaid", "partially_paid", "overdue"]
 // admin can spot who pays reliably and who's piling up unpaid invoices
 // without paging through every invoice individually.
 export const GET = withApiErrors(async (request) => {
-  const { user } = await authenticate(request)
-  requireRole(user, ["administrator", "owner"])
+  requirePermission(await authenticate(request), "invoices.view")
 
   // Statement invoices (see createStatementInvoice) are a rollup of debt
   // that's already counted via the underlying per-order invoices — counting
@@ -38,9 +39,10 @@ export const GET = withApiErrors(async (request) => {
     }
     const group = groups.get(key)
     group.totalInvoices += 1
-    if (inv.status === "paid") group.paidCount += 1
-    if (DUE_STATUSES.includes(inv.status)) {
-      const remaining = Math.max(0, inv.grandTotal - (inv.amountPaid || 0))
+    const status = computeInvoiceStatus(inv)
+    if (status === "paid") group.paidCount += 1
+    if (DUE_STATUSES.includes(status)) {
+      const remaining = invoiceAmounts(inv).balance
       group.dueCount += 1
       group.dueAmount += remaining
       group.dueInvoices.push({
@@ -49,7 +51,7 @@ export const GET = withApiErrors(async (request) => {
         orderNumber: inv.orderNumber,
         amount: remaining,
         dueDate: inv.dueDate,
-        status: inv.status,
+        status,
       })
     }
   }

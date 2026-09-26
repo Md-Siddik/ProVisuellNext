@@ -22,3 +22,7 @@ dist
 *.pem
 .vscode/*
 !.vscode/extensions.json
+.next-e2e
+
+# Private internal files (note attachments, voice notes) — never public
+/storage/

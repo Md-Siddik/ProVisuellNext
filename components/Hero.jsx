@@ -90,6 +90,8 @@ const Hero = () => {
         <EditableVideo
           k="hero.video"
           fallbackSrc="/videos/ProVisuell_Hero_Video.mp4"
+          // Painted instantly while the video loads (served as WebP).
+          poster="/assets/hero-poster.png"
           className="h-full w-full object-cover"
         />
       </div>

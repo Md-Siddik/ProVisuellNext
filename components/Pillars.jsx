@@ -7,6 +7,7 @@ import { useCmsCollection } from "../dashboard/editor/useCmsCollection"
 import CmsItemToolbar from "../dashboard/editor/CmsItemToolbar"
 import CmsItemEditor from "../dashboard/editor/CmsItemEditor"
 import AddCmsItemButton from "../dashboard/editor/AddCmsItemButton"
+import LazyVideo from "./LazyVideo"
 
 const FIELDS = [
   { key: "name", label: "editor.fieldServiceName", type: "text" },
@@ -58,13 +59,14 @@ export default function Pillars() {
           >
             <div className="absolute inset-0">
               {item.video ? (
-                <video autoPlay muted loop playsInline preload="auto" className="h-full w-full object-cover">
-                  <source src={item.video} type="video/mp4" />
-                </video>
+                // Downloads and plays only near the viewport (was: every section's video at page load).
+                <LazyVideo src={item.video} className="h-full w-full object-cover" />
               ) : (
                 <img
                   src={item.image}
                   alt=""
+                  loading="lazy"
+                  decoding="async"
                   className="h-full w-full object-cover transition duration-700 group-hover:scale-[1.025]"
                 />
               )}

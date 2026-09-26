@@ -8,7 +8,7 @@ import { BlogPost } from "@/lib/models/BlogPost"
 
 export const PATCH = withApiErrors(async (request, { params }) => {
   const { id } = await params
-  await requireBlogAdmin(request)
+  await requireBlogAdmin(request, "blog.edit")
   assertObjectId(id)
   const category = await BlogCategory.findById(id)
   if (!category) throw new ApiError(404, "Not found")
@@ -33,7 +33,7 @@ export const PATCH = withApiErrors(async (request, { params }) => {
 // Posts in a deleted category simply become uncategorised.
 export const DELETE = withApiErrors(async (request, { params }) => {
   const { id } = await params
-  await requireBlogAdmin(request)
+  await requireBlogAdmin(request, "blog.delete")
   assertObjectId(id)
   const category = await BlogCategory.findByIdAndDelete(id)
   if (!category) throw new ApiError(404, "Not found")

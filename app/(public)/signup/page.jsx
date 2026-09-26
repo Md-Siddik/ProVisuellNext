@@ -5,8 +5,10 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Eye, EyeOff, Lock, Mail, MailCheck, ShieldCheck, User } from "lucide-react"
 import { useAuth } from "@/context/AuthContext"
-import { friendlyAuthError, loginWithGoogle, loginWithMicrosoft, signUpWithEmail } from "@/lib/firebaseAuth"
+import { friendlyAuthError, logAuthError, loginWithGoogle, loginWithMicrosoft, signUpWithEmail } from "@/lib/firebaseAuth"
+import GoogleAuthButton from "@/components/auth/GoogleAuthButton"
 import { useTranslation } from "@/lib/i18n"
+import { useCooldown } from "@/hooks/useCooldown"
 
 // Kept in sync with Login.jsx's flag — see the comment there.
 const MICROSOFT_ENABLED = false
@@ -24,10 +26,24 @@ export default function SignupPage() {
   // "check your inbox" screen.
   const [sentTo, setSentTo] = useState("")
   const [resent, setResent] = useState(false)
+  // Matches the server's one-email-a-minute limit, so the button says when
+  // it can be used instead of failing.
+  const cooldown = useCooldown(sentTo ? `signup_${sentTo.toLowerCase()}` : null, 60)
   const [submitting, setSubmitting] = useState(false)
   const [awaitingProfile, setAwaitingProfile] = useState(false)
+  // Which sign-in button is working (popup open or account being checked).
+  const [oauthBusy, setOauthBusy] = useState(null)
   const router = useRouter()
-  const { loading, isAuthenticated, needsEmailVerification } = useAuth()
+  const { loading, isAuthenticated, needsEmailVerification, accountBlock, clearAccountBlock } = useAuth()
+
+  // The server refused the account (banned) and AuthContext signed
+  // it out again: stop waiting and say why (shown above the form).
+  useEffect(() => {
+    if (!accountBlock) return
+    setAwaitingProfile(false)
+    setSubmitting(false)
+    setOauthBusy(null)
+  }, [accountBlock])
 
   // Don't navigate the instant Firebase resolves — AuthContext's own
   // profile sync (which resolves the role the redirect depends on) is
@@ -51,6 +67,7 @@ export default function SignupPage() {
   const handleSubmit = async (e) => {
     e.preventDefault()
     setError("")
+    clearAccountBlock()
     // The verification link is only sent when both passwords match (the
     // server refuses a mismatch as well).
     if (password !== confirmPassword) {
@@ -61,6 +78,11 @@ export default function SignupPage() {
     try {
       await requestLink()
       setSentTo(email.trim())
+      try {
+        localStorage.setItem(`provisuell_cooldown_signup_${email.trim().toLowerCase()}`, String(Date.now() + 60000))
+      } catch {
+        // storage unavailable — the server-side limit still applies
+      }
     } catch (err) {
       setError(err.message || t("authErrors.generic"))
     } finally {
@@ -69,11 +91,13 @@ export default function SignupPage() {
   }
 
   const handleResend = async () => {
+    if (cooldown.left > 0) return
     setError("")
     setResent(false)
     setSubmitting(true)
     try {
       await requestLink()
+      cooldown.start()
       setResent(true)
     } catch (err) {
       setError(err.message || t("authErrors.generic"))
@@ -90,16 +114,22 @@ export default function SignupPage() {
     setConfirmPassword("")
   }
 
+  // Same Google sign-in as the Login page (lib/firebaseAuth.js); a new
+  // Google user gets their profile from the server on the first sync.
   const handleOAuth = async (provider) => {
     setError("")
+    clearAccountBlock()
     setSubmitting(true)
+    setOauthBusy(provider)
     try {
       if (provider === "google") await loginWithGoogle()
       else await loginWithMicrosoft()
       setAwaitingProfile(true)
     } catch (err) {
+      logAuthError(err)
       setError(friendlyAuthError(err))
       setSubmitting(false)
+      setOauthBusy(null)
     }
   }
 
@@ -128,10 +158,10 @@ export default function SignupPage() {
               <button
                 type="button"
                 onClick={handleResend}
-                disabled={submitting}
+                disabled={submitting || cooldown.left > 0}
                 className="flex h-[46px] items-center justify-center rounded-[10px] border border-white/15 bg-white/[0.03] text-[13px] font-[700] text-white transition hover:bg-white/[0.07] disabled:opacity-50"
               >
-                {submitting ? t("verifyEmail.resending") : t("verifyEmail.resend")}
+                {submitting ? t("verifyEmail.resending") : cooldown.left > 0 ? t("verifyEmail.resendIn", { n: cooldown.left }) : t("verifyEmail.resend")}
               </button>
               <button type="button" onClick={handleStartOver} className="mt-[4px] text-[13px] text-white/45 hover:text-white/70">
                 {t("signup.useDifferentEmail")}
@@ -145,6 +175,11 @@ export default function SignupPage() {
               {t("signup.subtitle")}
             </p>
 
+            {accountBlock && !error && (
+              <div role="alert" className="mt-[22px] rounded-[10px] border border-red-500/30 bg-red-500/10 px-[14px] py-[10px] text-[13px] text-red-300">
+                {t("login.accountBanned")}
+              </div>
+            )}
             {error && (
               <div className="mt-[22px] rounded-[10px] border border-red-500/30 bg-red-500/10 px-[14px] py-[10px] text-[13px] text-red-300">
                 {error}
@@ -240,14 +275,7 @@ export default function SignupPage() {
             </div>
 
             <div className="mt-[18px] space-y-[10px]">
-              <button
-                type="button"
-                onClick={() => handleOAuth("google")}
-                disabled={submitting}
-                className="flex w-full items-center justify-center gap-[10px] rounded-[10px] border border-white/15 bg-white/[0.03] py-[12px] text-[14px] text-white transition hover:bg-white/[0.07] disabled:opacity-50"
-              >
-                {t("signup.continueWithGoogle")}
-              </button>
+              <GoogleAuthButton label={t("signup.continueWithGoogle")} onClick={() => handleOAuth("google")} disabled={submitting} busy={oauthBusy === "google"} />
               {MICROSOFT_ENABLED && (
                 <button
                   type="button"

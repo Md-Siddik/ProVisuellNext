@@ -20,6 +20,10 @@ import {
 import { api } from "@/lib/api"
 import MeetingTooEarlyModal from "../../components/MeetingTooEarlyModal"
 import TimeFormatToggle from "../../components/appointments/TimeFormatToggle"
+import AttendanceBadge from "../../components/appointments/AttendanceBadge"
+import { joinMeeting } from "@/lib/appointments/joinMeeting"
+import AddNoteButton from "../../components/notes/AddNoteButton"
+import { CancelDialog, RescheduleDialog } from "../../components/appointments/AppointmentActions"
 import { useTranslation } from "@/lib/i18n"
 import { useTimeFormat } from "@/context/TimeFormatContext"
 import {
@@ -32,7 +36,6 @@ import {
   startOfWeekDate,
 } from "@/lib/appointments/time"
 
-const MEET_LINK = process.env.NEXT_PUBLIC_MEET_LINK || ""
 
 const DAY_LABEL_KEYS = [
   "appointmentsPage.dayMon",
@@ -155,19 +158,22 @@ function formatDateRange(monday) {
 function appointmentDisplayStatus(appt) {
   if (appt.status === "cancelled") return "cancelled"
   if (appt.status === "completed") return "completed"
-  if (new Date(appt.end) < new Date()) return "missed"
+  // Past: joined (the Join button was used) or missed — see lib/appointments/attendance.
+  if (new Date(appt.end) < new Date()) return appt.joinedAt ? "joined" : "missed"
   return "booked"
 }
 
 const APPT_STATUS_LABEL_KEYS = {
   booked: "appointmentsPage.apptStatusBooked",
   missed: "appointmentsPage.apptStatusMissed",
+  joined: "attendance.joined",
   completed: "appointmentsPage.apptStatusCompleted",
   cancelled: "appointmentsPage.apptStatusCancelled",
 }
 const APPT_STATUS_BADGE = {
   booked: "border-[#ff4b00]/40 text-[#ff4b00]",
   missed: "border-white/25 text-white/45",
+  joined: "border-emerald-500/40 text-emerald-400",
   completed: "border-emerald-500/40 text-emerald-400",
   cancelled: "border-red-500/40 text-red-400",
 }
@@ -314,7 +320,7 @@ function NewMeetingModal({ weekStart, onClose, onCreated }) {
   )
 }
 
-function AppointmentDetailModal({ appointment, onClose }) {
+function AppointmentDetailModal({ appointment, onClose, onChanged }) {
   const { t } = useTranslation()
   const { formatInstantDate, formatInstantTime } = useTimeFormat()
   const isPublicRequest = !appointment.createdBy
@@ -322,12 +328,18 @@ function AppointmentDetailModal({ appointment, onClose }) {
   const order = appointment.linkedOrder
   const [tooEarly, setTooEarly] = useState(false)
 
-  const handleJoinClick = (e) => {
-    if (new Date(appointment.start) > new Date()) {
-      e.preventDefault()
-      setTooEarly(true)
-    }
+  const { can } = useAuth()
+  const [joinState, setJoinState] = useState(appointment)
+  const [joinError, setJoinError] = useState("")
+  const [dialog, setDialog] = useState(null) // "reschedule" | "cancel"
+  const handleJoinClick = async () => {
+    setJoinError("")
+    const result = await joinMeeting(appointment)
+    if (result.ok) setJoinState(result.appointment)
+    else if (result.code === "MEETING_NOT_STARTED") setTooEarly(true)
+    else setJoinError(result.error?.message || "")
   }
+  const upcoming = new Date(appointment.end) > new Date()
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-[16px]" onClick={onClose}>
@@ -380,9 +392,18 @@ function AppointmentDetailModal({ appointment, onClose }) {
           </p>
           <p className="flex items-center gap-[10px]">
             <Mail size={15} className="shrink-0 text-white/40" />
-            {appointment.requestedByName} ({appointment.requestedByEmail})
+            {appointment.requestedByName}
+            {/* The API leaves the address out for viewers without customers.viewEmail. */}
+            {appointment.requestedByEmail && ` (${appointment.requestedByEmail})`}
           </p>
+          {displayStatus !== "cancelled" && (
+            <p className="flex items-center gap-[10px]">
+              <span className="text-white/45">{t("attendance.label")}</span>
+              <AttendanceBadge appointment={joinState} showTime />
+            </p>
+          )}
           {appointment.notes && <p className="rounded-[8px] bg-white/[0.03] p-[10px] text-white/60">{appointment.notes}</p>}
+          <AddNoteButton type="appointment" id={appointment._id} className="pt-[4px]" />
         </div>
 
         {order && (
@@ -409,20 +430,62 @@ function AppointmentDetailModal({ appointment, onClose }) {
           </div>
         )}
 
-        {displayStatus !== "cancelled" && MEET_LINK && (
-          <a
-            href={MEET_LINK}
-            target="_blank"
-            rel="noreferrer"
+        {displayStatus !== "cancelled" && upcoming && (
+          <button
+            type="button"
             onClick={handleJoinClick}
             className="mt-[18px] flex w-full items-center justify-center gap-[8px] rounded-[10px] bg-[#ff4b00] py-[11px] text-[13px] font-[800] uppercase tracking-[0.02em] text-white hover:brightness-110"
           >
             <Video size={15} />
             {t("appointmentsPage.joinMeetingButton")}
-          </a>
+          </button>
+        )}
+        {joinError && <p className="mt-[8px] text-[12.5px] text-red-300">{joinError}</p>}
+        {displayStatus !== "cancelled" && (can("appointments.reschedule") || can("appointments.cancel")) && (
+          <div className="mt-[10px] grid grid-cols-2 gap-[8px]">
+            {can("appointments.reschedule") && (
+              <button
+                type="button"
+                onClick={() => setDialog("reschedule")}
+                className="rounded-[10px] border border-white/15 py-[10px] text-[12.5px] font-[700] text-white/80 hover:bg-white/[0.06]"
+              >
+                {t("appointmentActions.reschedule")}
+              </button>
+            )}
+            {can("appointments.cancel") && (
+              <button
+                type="button"
+                onClick={() => setDialog("cancel")}
+                className="rounded-[10px] border border-red-500/30 py-[10px] text-[12.5px] font-[700] text-red-300 hover:bg-red-500/10"
+              >
+                {t("appointmentActions.cancel")}
+              </button>
+            )}
+          </div>
         )}
       </div>
       {tooEarly && <MeetingTooEarlyModal start={appointment.start} onClose={() => setTooEarly(false)} />}
+      {dialog === "reschedule" && (
+        <RescheduleDialog
+          staff
+          appointment={appointment}
+          onClose={() => setDialog(null)}
+          onDone={(updated) => {
+            setDialog(null)
+            onChanged({ ...appointment, ...updated })
+          }}
+        />
+      )}
+      {dialog === "cancel" && (
+        <CancelDialog
+          appointment={appointment}
+          onClose={() => setDialog(null)}
+          onDone={(updated) => {
+            setDialog(null)
+            onChanged({ ...appointment, ...updated })
+          }}
+        />
+      )}
     </div>
   )
 }
@@ -467,6 +530,7 @@ function OrderDetailModal({ order, onClose }) {
             )
           })()}
           <p className="rounded-[8px] bg-white/[0.03] p-[10px] text-white/60">{order.specification}</p>
+          <AddNoteButton type="order" id={order._id} className="pt-[4px]" />
         </div>
 
         <Link
@@ -482,7 +546,7 @@ function OrderDetailModal({ order, onClose }) {
 
 export default function Ansattmoter() {
   const { t } = useTranslation()
-  const { role } = useAuth()
+  const { role, can } = useAuth()
   const { formatTime, formatInstantTime } = useTimeFormat()
   const base = role === "owner" ? "/dashboard/owner" : "/dashboard/admin"
   // Monday of the shown week, as an Oslo calendar date ("YYYY-MM-DD").
@@ -494,6 +558,21 @@ export default function Ansattmoter() {
   const [selectedAppt, setSelectedAppt] = useState(null)
   const [selectedOrder, setSelectedOrder] = useState(null)
   const [error, setError] = useState("")
+
+  // ?appointment=<id> (e.g. "Open record" on a note): jump to its week and open it.
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get("appointment")
+    if (!id) return
+    api
+      .get(`/appointments?id=${encodeURIComponent(id)}`)
+      .then(({ appointments: found }) => {
+        const appt = found?.[0]
+        if (!appt) return
+        setWeekStart(startOfWeekDate(osloParts(appt.start).date))
+        setSelectedAppt(appt)
+      })
+      .catch(() => {})
+  }, [])
 
   const weekDates = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart])
   const todayOslo = getNorwayNow().date
@@ -580,6 +659,7 @@ export default function Ansattmoter() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-[10px]">
+          {can("appointments.manageAvailability") && (
           <Link
             href={`${base}/motetilgjengelighet`}
             className="inline-flex items-center gap-[8px] rounded-[10px] border border-white/15 px-[14px] py-[10px] text-[13px] font-[700] text-white/80 hover:bg-white/[0.06]"
@@ -587,6 +667,8 @@ export default function Ansattmoter() {
             <CalendarCog size={15} />
             {t("availabilityPage.navLabel")}
           </Link>
+          )}
+          {can("appointments.create") && (
           <button
             onClick={() => setShowModal(true)}
             className="inline-flex items-center gap-[8px] rounded-[10px] bg-[#ff4b00] px-[16px] py-[10px] text-[13px] font-[800] uppercase tracking-[0.02em] text-white hover:brightness-110"
@@ -594,6 +676,7 @@ export default function Ansattmoter() {
             <Plus size={15} />
             {t("appointmentsPage.newMeetingTitle")}
           </button>
+          )}
         </div>
       </div>
 
@@ -784,7 +867,17 @@ export default function Ansattmoter() {
           onCreated={(appt) => setAppointments((prev) => [...prev, appt])}
         />
       )}
-      {selectedAppt && <AppointmentDetailModal appointment={selectedAppt} onClose={() => setSelectedAppt(null)} />}
+      {selectedAppt && (
+        <AppointmentDetailModal
+          appointment={selectedAppt}
+          onClose={() => setSelectedAppt(null)}
+          // Rescheduled/cancelled: move or drop the block in place.
+          onChanged={(updated) => {
+            setAppointments((prev) => prev.map((a) => (a._id === updated._id ? updated : a)))
+            setSelectedAppt(null)
+          }}
+        />
+      )}
       {selectedOrder && <OrderDetailModal order={selectedOrder} onClose={() => setSelectedOrder(null)} />}
     </div>
   )

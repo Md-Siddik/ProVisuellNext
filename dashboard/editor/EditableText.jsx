@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import { useTranslation } from "@/lib/i18n"
+import { isSharedContentKey } from "@/lib/siteContent"
 import { useEditorMode } from "./EditorModeContext"
 import AnchoredPopover from "./AnchoredPopover"
 
@@ -59,6 +60,7 @@ export default function EditableText({ k }) {
   }
 
   const rows = Math.min(10, Math.max(2, draft.split("\n").length + 1))
+  const shared = isSharedContentKey(k)
 
   return (
     <>
@@ -74,12 +76,15 @@ export default function EditableText({ k }) {
         }}
         className="pv-editable"
         style={{ whiteSpace: "pre-line" }}
-        title={t("editor.doubleClickEdit")}
+        title={shared ? `${t("editor.doubleClickEdit")} — ${t("editor.sharedField")}` : t("editor.doubleClickEdit")}
       >
         {value}
       </span>
 
-      <AnchoredPopover anchorRef={anchorRef} open={editing} onClose={cancel} width={320} height={190}>
+      <AnchoredPopover anchorRef={anchorRef} open={editing} onClose={cancel} width={320} height={shared ? 222 : 190}>
+        {shared && (
+          <p style={{ margin: "0 0 8px", fontSize: 11.5, lineHeight: 1.4, color: "#ff9b6a", fontWeight: 600 }}>{t("editor.sharedFieldHint")}</p>
+        )}
         <textarea
           ref={textareaRef}
           value={draft}

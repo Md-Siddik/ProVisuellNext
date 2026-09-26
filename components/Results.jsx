@@ -210,6 +210,8 @@ const ProjectCard = ({ item, enabled, onEdit, onDelete, onTogglePublish, onMoveU
         <img
           src={item.image}
           alt={`${item.title} / ${item.category}`}
+          loading="lazy"
+          decoding="async"
           draggable="false"
           className="h-full w-full select-none object-cover transition-transform duration-500 group-hover:scale-[1.035]"
         />

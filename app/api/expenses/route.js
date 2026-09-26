@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server"
-import { authenticate, requireRole, withApiErrors, ApiError } from "@/lib/auth"
+import { authenticate, withApiErrors, ApiError } from "@/lib/auth"
+import { requirePermission } from "@/lib/access"
 import { Expense } from "@/lib/models/Expense"
 
 export const GET = withApiErrors(async (request) => {
-  const { user } = await authenticate(request)
-  requireRole(user, ["administrator", "owner"])
+  requirePermission(await authenticate(request), "expenses.view")
 
   const params = new URL(request.url).searchParams
   const from = params.get("from")
@@ -20,8 +20,7 @@ export const GET = withApiErrors(async (request) => {
 })
 
 export const POST = withApiErrors(async (request) => {
-  const { user } = await authenticate(request)
-  requireRole(user, ["administrator", "owner"])
+  const { user } = requirePermission(await authenticate(request), "expenses.create")
 
   const { amount, category, date, note } = (await request.json().catch(() => ({}))) || {}
   if (!amount || !category || !date) {

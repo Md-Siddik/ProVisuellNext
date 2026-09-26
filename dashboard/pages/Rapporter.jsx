@@ -29,6 +29,7 @@ import {
 } from "lucide-react"
 import { api } from "@/lib/api"
 import { useTranslation } from "@/lib/i18n"
+import AddNoteButton from "@/components/notes/AddNoteButton"
 
 const ORANGE = "#ff4b00"
 const GREEN = "#3ee23e"
@@ -336,6 +337,11 @@ export default function Rapporter() {
   const [month, setMonth] = useState(() =>
     new Date().toISOString().slice(0, 7)
   )
+  // ?month=YYYY-MM (e.g. "Open record" on a note about a report month).
+  useEffect(() => {
+    const fromUrl = new URLSearchParams(window.location.search).get("month")
+    if (/^\d{4}-(0[1-9]|1[0-2])$/.test(fromUrl || "")) setMonth(fromUrl)
+  }, [])
 
   const [data, setData] = useState(null)
   const [error, setError] = useState("")
@@ -496,6 +502,7 @@ export default function Rapporter() {
         </div>
 
         <div className="flex flex-wrap items-center gap-[20px]">
+          <AddNoteButton type="report" id={month} />
           <div
             onClick={openMonthPicker}
             className="relative flex h-[51px] min-w-[196px] cursor-pointer items-center gap-[12px] rounded-[9px] border border-white/[0.16] bg-[#111212] px-[20px] text-white transition-colors hover:border-white/25"

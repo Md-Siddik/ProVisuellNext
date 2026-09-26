@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
-import { authenticate, requireRole, withApiErrors } from "@/lib/auth"
+import { authenticate, withApiErrors } from "@/lib/auth"
+import { requirePermission } from "@/lib/access"
 import { CustomerLocation } from "@/lib/models/CustomerLocation"
 
 // Staff-only: every saved location, joined with its order, for the
@@ -7,8 +8,7 @@ import { CustomerLocation } from "@/lib/models/CustomerLocation"
 // customer — never reaches this: requireRole below 403s them before any
 // coordinates are read.
 export const GET = withApiErrors(async (request) => {
-  const { user } = await authenticate(request)
-  requireRole(user, ["administrator", "owner"])
+  requirePermission(await authenticate(request), "customers.viewLocation")
 
   const locations = await CustomerLocation.find({})
     .sort({ updatedAt: -1 })

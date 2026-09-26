@@ -4,7 +4,9 @@ import { useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Bell, Check, CheckCheck } from "lucide-react"
 import { api } from "@/lib/api"
+import { useSharedPoll } from "@/hooks/useSharedPoll"
 import { useTranslation } from "@/lib/i18n"
+import { useTimeFormat } from "@/context/TimeFormatContext"
 import { OPEN_CHAT_EVENT } from "./StartOrderModal"
 
 // Notifications are stored server-side with their Norwegian text. They are
@@ -28,6 +30,7 @@ const LOCALE_MAP = { no: "no-NO", en: "en-US", sv: "sv-SE", fi: "fi-FI", da: "da
 // an authenticated user can see notifications reads from the same API.
 export default function NotificationBell() {
   const { t, language } = useTranslation()
+  const { formatInstantDateTime } = useTimeFormat()
 
   const timeAgo = (iso) => {
     const diff = Date.now() - new Date(iso).getTime()
@@ -40,6 +43,24 @@ export default function NotificationBell() {
   }
 
   const localizeNotification = (n) => {
+    // Cancel / reschedule carry structured data: render fully in the viewer's
+    // language and time format (the appointment title is the customer's own text).
+    if (n.data && (n.type === "appointment_cancelled" || n.type === "appointment_rescheduled")) {
+      const cancelled = n.type === "appointment_cancelled"
+      const vars = {
+        title: n.data.title || "",
+        when: formatInstantDateTime(n.data.start),
+        before: n.data.previousStart ? formatInstantDateTime(n.data.previousStart) : "",
+      }
+      let message = t(cancelled ? "notifications.msgAppointmentCancelled" : "notifications.msgAppointmentRescheduled", vars)
+      if (n.data.byCustomer) message = t("notifications.msgByCustomer", { name: n.data.name || "", message })
+      return { title: t(cancelled ? "notifications.titleAppointmentCancelled" : "notifications.titleAppointmentRescheduled"), message }
+    }
+    if (n.type === "note_reminder") {
+      const title = t(n.data?.kind === "todo" ? "notifications.titleTodoReminder" : "notifications.titleNoteReminder")
+      const text = n.data?.title || n.message
+      return { title, message: n.data?.sharedBy ? t("notifications.msgSharedBy", { message: text, name: n.data.sharedBy }) : text }
+    }
     let title = n.title
     let message = n.message
     if (TITLE_KEYS[n.title]) {
@@ -58,30 +79,21 @@ export default function NotificationBell() {
   }
 
   const [open, setOpen] = useState(false)
-  const [unreadCount, setUnreadCount] = useState(0)
+  // Shared by both header bells (desktop + mobile are both mounted) and the
+  // dashboard: one request every 30 s, paused while the tab is hidden.
+  const { value: polledCount, set: setSharedCount } = useSharedPoll(
+    "notifications-unread",
+    async () => (await api.get("/notifications/unread-count")).count,
+    30000
+  )
+  const unreadCount = polledCount || 0
+  const setUnreadCount = (next) => setSharedCount(typeof next === "function" ? next(unreadCount) : next)
   const [notifications, setNotifications] = useState([])
   const [loaded, setLoaded] = useState(false)
   const [markingAll, setMarkingAll] = useState(false)
   const boxRef = useRef(null)
   const router = useRouter()
 
-  useEffect(() => {
-    let cancelled = false
-    const check = async () => {
-      try {
-        const { count } = await api.get("/notifications/unread-count")
-        if (!cancelled) setUnreadCount(count)
-      } catch {
-        // ignore — badge just won't update this tick
-      }
-    }
-    check()
-    const interval = setInterval(check, 30000)
-    return () => {
-      cancelled = true
-      clearInterval(interval)
-    }
-  }, [])
 
   useEffect(() => {
     const onClickOutside = (e) => {

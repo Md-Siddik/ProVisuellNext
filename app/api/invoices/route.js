@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
-import { authenticate, requireRole, withApiErrors, ApiError } from "@/lib/auth"
+import { authenticate, withApiErrors, ApiError } from "@/lib/auth"
+import { requirePermission } from "@/lib/access"
 import { Invoice } from "@/lib/models/Invoice"
 import { Order } from "@/lib/models/Order"
 import { createInvoiceFromOrder } from "@/lib/invoicing"
@@ -11,8 +12,7 @@ import { createInvoiceFromOrder } from "@/lib/invoicing"
 // route) didn't happen — e.g. an order completed before this existed.
 // dueDate is optional now; omitted, it defaults to +14 days.
 export const POST = withApiErrors(async (request) => {
-  const { user } = await authenticate(request)
-  requireRole(user, ["administrator", "owner"])
+  const { user } = requirePermission(await authenticate(request), "invoices.create")
 
   const { orderId, dueDate, deliveryDate, deliveryPlace, discount, paymentTerms, note, payment } =
     (await request.json().catch(() => ({}))) || {}

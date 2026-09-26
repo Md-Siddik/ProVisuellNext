@@ -5,12 +5,12 @@ import { getSettings } from "@/lib/blog/mutations"
 import { BlogSettings } from "@/lib/models/BlogSettings"
 
 export const GET = withApiErrors(async (request) => {
-  await requireBlogAdmin(request)
+  await requireBlogAdmin(request, "blog.view")
   return NextResponse.json({ settings: await getSettings() })
 })
 
 export const PATCH = withApiErrors(async (request) => {
-  await requireBlogAdmin(request)
+  await requireBlogAdmin(request, "blog.settings")
   const body = (await request.json().catch(() => ({}))) || {}
   if (body.requireCommentApproval !== undefined) {
     await BlogSettings.updateOne({ key: "main" }, { requireCommentApproval: Boolean(body.requireCommentApproval) }, { upsert: true })

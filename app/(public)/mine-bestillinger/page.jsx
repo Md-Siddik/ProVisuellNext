@@ -10,6 +10,10 @@ import { useTranslation } from "@/lib/i18n"
 import ProtectedRoute from "@/context/ProtectedRoute"
 import { useTimeFormat } from "@/context/TimeFormatContext"
 import TimeFormatToggle from "@/components/appointments/TimeFormatToggle"
+import AttendanceBadge from "@/components/appointments/AttendanceBadge"
+import { joinMeeting } from "@/lib/appointments/joinMeeting"
+import { CancelDialog, RescheduleDialog } from "@/components/appointments/AppointmentActions"
+import { customerCanCancel, customerCanReschedule } from "@/lib/appointments/attendance"
 
 const STATUS_STYLE = {
   pending: "border-violet-500/40 text-violet-400",
@@ -18,7 +22,6 @@ const STATUS_STYLE = {
   completed: "border-emerald-500/40 text-emerald-400",
 }
 
-const MEET_LINK = process.env.NEXT_PUBLIC_MEET_LINK || ""
 
 function formatDate(iso) {
   const d = new Date(iso)
@@ -55,6 +58,14 @@ function MineBestillinger() {
   const [appointments, setAppointments] = useState([])
   const [loadingAppointments, setLoadingAppointments] = useState(true)
   const [tooEarly, setTooEarly] = useState(null)
+  const [rescheduling, setRescheduling] = useState(null)
+  const [cancelling, setCancelling] = useState(null)
+  const [joiningId, setJoiningId] = useState(null)
+  const [joinError, setJoinError] = useState("")
+  // Server clock minus ours, so "Join" opens by the server's time. The join
+  // endpoint enforces the same rule on its own; this only drives the button.
+  const [clockSkew, setClockSkew] = useState(0)
+  const [, setTick] = useState(0)
 
   useEffect(() => {
     let cancelled = false
@@ -85,7 +96,11 @@ function MineBestillinger() {
     let cancelled = false
     api
       .get("/appointments/mine")
-      .then((data) => !cancelled && setAppointments(data.appointments))
+      .then((data) => {
+        if (cancelled) return
+        setAppointments(data.appointments)
+        if (data.serverTime) setClockSkew(new Date(data.serverTime).getTime() - Date.now())
+      })
       .catch((err) => console.error(err))
       .finally(() => !cancelled && setLoadingAppointments(false))
     return () => {
@@ -93,18 +108,30 @@ function MineBestillinger() {
     }
   }, [])
 
+  // Re-evaluate the Join / Reschedule states as time passes — only while
+  // there's an upcoming meeting and the tab is visible.
+  const hasUpcoming = appointments.some((a) => a.status !== "cancelled" && new Date(a.end) > new Date())
+  useEffect(() => {
+    if (!hasUpcoming) return
+    const timer = setInterval(() => {
+      if (document.visibilityState === "visible") setTick((n) => n + 1)
+    }, 15000)
+    return () => clearInterval(timer)
+  }, [hasUpcoming])
+  const serverNow = new Date(Date.now() + clockSkew)
+
+  const replace = (updated) => setAppointments((prev) => prev.map((a) => (a._id === updated._id ? updated : a)))
+
+  // Only this click counts as joining: the server records it and only then
+  // releases the meeting URL, which opens in the new tab.
   const handleJoin = async (appointment) => {
-    if (new Date(appointment.start) > new Date()) {
-      setTooEarly(appointment)
-      return
-    }
-    if (MEET_LINK) window.open(MEET_LINK, "_blank", "noopener,noreferrer")
-    try {
-      await api.patch(`/appointments/${appointment._id}/join`)
-      setAppointments((prev) => prev.filter((a) => a._id !== appointment._id))
-    } catch (err) {
-      console.error(err)
-    }
+    setJoinError("")
+    setJoiningId(appointment._id)
+    const result = await joinMeeting(appointment)
+    setJoiningId(null)
+    if (result.ok) replace(result.appointment)
+    else if (result.code === "MEETING_NOT_STARTED") setTooEarly(appointment)
+    else setJoinError(result.error?.message || t("authErrors.generic"))
   }
 
   return (
@@ -185,19 +212,23 @@ function MineBestillinger() {
 
         <div className="mt-[18px] space-y-[12px]">
           {loadingAppointments && <p className="text-[13px] text-white/40">{t("myOrdersPage.loadingAppointments")}</p>}
+          {joinError && <p className="rounded-[8px] bg-red-500/10 px-[12px] py-[8px] text-[13px] text-red-300">{joinError}</p>}
           {!loadingAppointments && appointments.length === 0 && (
             <div className="rounded-[14px] border border-white/[0.08] bg-[#111212] p-[24px] text-center">
               <p className="text-[14px] text-white/60">{t("myOrdersPage.noAppointments")}</p>
             </div>
           )}
           {appointments.map((a) => (
-            <div key={a._id} className="flex items-center justify-between rounded-[14px] border border-white/[0.08] bg-[#111212] p-[18px]">
+            <div key={a._id} className="flex flex-wrap items-center justify-between gap-[12px] rounded-[14px] border border-white/[0.08] bg-[#111212] p-[18px]">
               <div className="flex items-center gap-[14px]">
                 <span className="flex h-[40px] w-[40px] shrink-0 items-center justify-center rounded-full bg-[#ff4b00]/15 text-[#ff4b00]">
                   <CalendarClock size={18} />
                 </span>
                 <div>
-                  <p className="text-[14px] font-[700] text-white">{a.title}</p>
+                  <p className="flex flex-wrap items-center gap-[8px] text-[14px] font-[700] text-white">
+                    {a.title}
+                    {a.status !== "cancelled" && <AttendanceBadge appointment={a} />}
+                  </p>
                   <p className="mt-[2px] text-[13px] tabular-nums text-white/50">
                     {formatInstantDateTime(a.start)}–{formatInstantTime(a.end)} · {t("timeFormat.norwayTime")}
                   </p>
@@ -207,20 +238,69 @@ function MineBestillinger() {
                 <span className="rounded-[6px] border border-red-500/40 px-[10px] py-[4px] text-[11px] font-[800] text-red-400">
                   {t("myOrdersPage.appointmentCancelled")}
                 </span>
-              ) : MEET_LINK ? (
-                <button
-                  type="button"
-                  onClick={() => handleJoin(a)}
-                  className="rounded-[8px] bg-[#ff4b00] px-[14px] py-[8px] text-[11.5px] font-[800] uppercase tracking-[0.02em] text-white hover:brightness-110"
-                >
-                  {t("myOrdersPage.join")}
-                </button>
+              ) : new Date(a.end) > serverNow ? (
+                <div className="flex shrink-0 flex-col items-end gap-[6px]">
+                  {serverNow >= new Date(a.start) ? (
+                    <button
+                      type="button"
+                      onClick={() => handleJoin(a)}
+                      disabled={joiningId === a._id}
+                      className="rounded-[8px] bg-[#ff4b00] px-[14px] py-[8px] text-[11.5px] font-[800] uppercase tracking-[0.02em] text-white hover:brightness-110 disabled:opacity-60"
+                    >
+                      {joiningId === a._id ? t("appointmentActions.joining") : t("appointmentActions.joinMeeting")}
+                    </button>
+                  ) : (
+                    // Disabled until the start — the link doesn't exist on this page yet.
+                    <button
+                      type="button"
+                      disabled
+                      aria-disabled="true"
+                      className="cursor-not-allowed rounded-[8px] border border-white/15 bg-white/[0.04] px-[14px] py-[8px] text-[11.5px] font-[700] tabular-nums text-white/55"
+                    >
+                      {t("appointmentActions.availableAt", { time: formatInstantTime(a.start) })}
+                    </button>
+                  )}
+                  <div className="flex gap-[10px] text-[12px]">
+                    {customerCanReschedule(a, serverNow) ? (
+                      <button type="button" onClick={() => setRescheduling(a)} className="font-[700] text-white/70 hover:text-white">
+                        {t("appointmentActions.reschedule")}
+                      </button>
+                    ) : (
+                      !a.joinedAt && <span className="text-white/35" title={t("appointmentActions.rescheduleClosed")}>{t("appointmentActions.rescheduleClosedShort")}</span>
+                    )}
+                    {customerCanCancel(a, serverNow) && (
+                      <button type="button" onClick={() => setCancelling(a)} className="font-[700] text-red-300/80 hover:text-red-300">
+                        {t("appointmentActions.cancel")}
+                      </button>
+                    )}
+                  </div>
+                </div>
               ) : null}
             </div>
           ))}
         </div>
       </main>
       {tooEarly && <MeetingTooEarlyModal start={tooEarly.start} onClose={() => setTooEarly(null)} />}
+      {rescheduling && (
+        <RescheduleDialog
+          appointment={rescheduling}
+          onClose={() => setRescheduling(null)}
+          onDone={(updated) => {
+            replace(updated)
+            setRescheduling(null)
+          }}
+        />
+      )}
+      {cancelling && (
+        <CancelDialog
+          appointment={cancelling}
+          onClose={() => setCancelling(null)}
+          onDone={(updated) => {
+            replace({ ...cancelling, ...updated })
+            setCancelling(null)
+          }}
+        />
+      )}
     </div>
   )
 }

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
-import { authenticate, requireRole, withApiErrors, ApiError } from "@/lib/auth"
+import { authenticate, withApiErrors, ApiError } from "@/lib/auth"
+import { requirePermission } from "@/lib/access"
 import { saveUploadedFile } from "@/lib/uploadStorage"
 
 // Matches the old multer config: 80MB limit (covers hero-style background
@@ -7,8 +8,7 @@ import { saveUploadedFile } from "@/lib/uploadStorage"
 const MAX_FILE_SIZE = 80 * 1024 * 1024
 
 export const POST = withApiErrors(async (request) => {
-  const { user } = await authenticate(request)
-  requireRole(user, ["administrator"])
+  requirePermission(await authenticate(request), "cms.edit")
 
   const formData = await request.formData()
   const file = formData.get("file")

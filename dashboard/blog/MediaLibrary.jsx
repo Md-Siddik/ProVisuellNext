@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { Check, Copy, Film, Trash2, Upload } from "lucide-react"
 import { api } from "@/lib/api"
 import { useTranslation } from "@/lib/i18n"
+import { useAuth } from "@/context/AuthContext"
 import { Card, Empty, ErrorNote, LoadingBlock, Pager, Spinner, btnPrimary, iconBtn, inputClass } from "./adminUi"
 import { checkMediaFile, MAX_IMAGE_MB, MAX_VIDEO_MB, uploadBlogMedia } from "./media"
 
@@ -11,6 +12,7 @@ const sizeLabel = (bytes) => (bytes > 1024 * 1024 ? `${(bytes / 1024 / 1024).toF
 
 export default function MediaLibrary() {
   const { t } = useTranslation()
+  const { can } = useAuth()
   const [type, setType] = useState("")
   const [page, setPage] = useState(1)
   const [data, setData] = useState(null)
@@ -139,9 +141,11 @@ export default function MediaLibrary() {
                       <button type="button" className={iconBtn} onClick={() => copy(m)} title={t("blog.copyLink")} aria-label={t("blog.copyLink")}>
                         {copied === m._id ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
                       </button>
-                      <button type="button" className={`${iconBtn} hover:!text-red-400`} onClick={() => remove(m)} title={t("blog.delete")} aria-label={t("blog.delete")}>
-                        <Trash2 size={14} />
-                      </button>
+                      {can("blog.delete") && (
+                        <button type="button" className={`${iconBtn} hover:!text-red-400`} onClick={() => remove(m)} title={t("blog.delete")} aria-label={t("blog.delete")}>
+                          <Trash2 size={14} />
+                        </button>
+                      )}
                     </div>
                   </div>
                 </Card>

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { ApiError, withApiErrors } from "@/lib/auth"
-import { identityOf, requireBlogAdmin } from "@/lib/blog/access"
+import { assertCanPublish, identityOf, requireBlogAdmin } from "@/lib/blog/access"
 import { buildPostFields } from "@/lib/blog/mutations"
 import { listPublicPosts } from "@/lib/blog/queries"
 import { toInt } from "@/lib/blog/utils"
@@ -21,9 +21,10 @@ export const GET = withApiErrors(async (request) => {
 
 // Admin/owner only. The author is the authenticated user — never the body.
 export const POST = withApiErrors(async (request) => {
-  const auth = await requireBlogAdmin(request)
+  const auth = await requireBlogAdmin(request, "blog.create")
   const body = await request.json().catch(() => ({}))
   const fields = await buildPostFields(body)
+  assertCanPublish(auth, fields.status)
   const { name, avatar } = identityOf(auth)
   try {
     const post = await BlogPost.create({ ...fields, author: { user: auth.user._id, name, avatar } })

@@ -32,9 +32,11 @@ export function EditorModeProvider({ children }) {
     async (key, value) => {
       const trimmed = value.trim()
       if (!trimmed) throw new Error(t("editor.textEmpty"))
-      await api.put(`/site-content/${encodeURIComponent(key)}`, { value: trimmed, language, type: "text" })
+      // The server decides what's shared (lib/siteContent.js): a shared value
+      // is stored once for every language, whichever language is selected.
+      const { shared } = await api.put(`/site-content/${encodeURIComponent(key)}`, { value: trimmed, language, type: "text" })
       await refreshContent()
-      notify("success", t("editor.saved"))
+      notify("success", shared ? t("editor.savedAllLanguages") : t("editor.saved"))
     },
     [language, refreshContent, notify, t]
   )

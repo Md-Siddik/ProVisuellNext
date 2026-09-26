@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation"
 import { AlertTriangle, Bell, ChevronDown, ChevronUp, FileText } from "lucide-react"
 import { api } from "@/lib/api"
 import { useTranslation } from "@/lib/i18n"
+import AddNoteButton from "@/components/notes/AddNoteButton"
 
 function nok(value = 0) {
   return `kr ${Math.round(Number(value) || 0).toLocaleString("no-NO")},-`
@@ -19,7 +20,7 @@ function formatDate(value) {
 }
 
 export default function Kundebetalinger() {
-  const { t } = useTranslation()
+  const { t, language } = useTranslation()
   const router = useRouter()
   const [customers, setCustomers] = useState([])
   const [loading, setLoading] = useState(true)
@@ -54,6 +55,7 @@ export default function Kundebetalinger() {
       // that (see Server/src/lib/invoicing.js createStatementInvoice) —
       // not just a text summary.
       const { statement } = await api.post("/invoices/remind", {
+        lang: language,
         invoiceIds: customer.dueInvoices.map((i) => i._id),
         customerId: customer.customerId,
         customerEmail: customer.customerEmail,
@@ -110,7 +112,10 @@ export default function Kundebetalinger() {
                 <Fragment key={key}>
                   <tr className="border-b border-white/[0.06] last:border-0 hover:bg-white/[0.015]">
                     <td className="px-[18px] py-[13px]">
-                      <p className="font-[700] text-white">{c.customerName}</p>
+                      <p className="flex items-center gap-[8px] font-[700] text-white">
+                        {c.customerName}
+                        <AddNoteButton type="customer" id={c.customerId || `email:${c.customerEmail}`} variant="icon" />
+                      </p>
                       <p className="mt-[1px] text-[11.5px] text-white/40">{c.customerEmail || "—"}</p>
                     </td>
                     <td className="px-[18px] py-[13px] text-white/70">{c.totalInvoices}</td>

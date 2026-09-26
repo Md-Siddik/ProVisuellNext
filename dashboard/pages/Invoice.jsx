@@ -7,9 +7,8 @@ import {
     Download,
     Printer,
 } from "lucide-react"
-import html2canvas from "html2canvas"
-import jsPDF from "jspdf"
 import { useTranslation } from "@/lib/i18n"
+import { computeInvoiceStatus } from "@/lib/invoices/status"
 
 function nok(value = 0) {
     return `${Number(value || 0).toLocaleString("no-NO", {
@@ -221,8 +220,10 @@ export default function Invoice({
         grandTotal - amountPaid
     )
 
+    // Same rule as the API and the invoice email (lib/invoices/status.js).
+    const effectiveStatus = computeInvoiceStatus(invoice)
     const watermark = getWatermark(
-        invoice.status,
+        effectiveStatus,
         t
     )
 
@@ -259,6 +260,9 @@ export default function Invoice({
                 await document.fonts.ready
             }
 
+            // Loaded only when a PDF is actually requested (~0.5 MB of JS the
+            // invoice view itself doesn't need).
+            const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([import("html2canvas"), import("jspdf")])
             const canvas = await html2canvas(node, {
                 scale: 2,
                 backgroundColor: "#ffffff",
@@ -454,7 +458,7 @@ export default function Invoice({
 
                                 <div className="mt-[9px] flex justify-end">
                                     <InvoiceStatus
-                                        status={invoice.status}
+                                        status={effectiveStatus}
                                     />
                                 </div>
                             </div>

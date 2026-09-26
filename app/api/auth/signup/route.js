@@ -4,7 +4,8 @@ import { connectDB } from "@/lib/db"
 import { isEmailConfigured, sendEmail } from "@/lib/mailer"
 import { User } from "@/lib/models/User"
 import { PendingSignup } from "@/lib/models/PendingSignup"
-import { buildToken, encryptPassword } from "@/lib/pendingSignup"
+import { buildToken, encryptPassword, hashKey } from "@/lib/pendingSignup"
+import { assertNotBanned } from "@/lib/accountIdentity"
 
 // Public email/password signup, step 1 of 2. Nothing is created in Firebase
 // here — the details are parked in PendingSignup and a verification link is
@@ -81,6 +82,8 @@ export const POST = withApiErrors(async (request) => {
   }
 
   await connectDB()
+  // A banned person can't sign up again, whatever the sign-in method.
+  await assertNotBanned({ email })
   if (await User.exists({ email: new RegExp(`^${escapeRegex(email)}$`, "i") })) {
     throw new ApiError(409, "An account with this email already exists")
   }
@@ -94,7 +97,7 @@ export const POST = withApiErrors(async (request) => {
   const { key, iv, tag, ciphertext } = encryptPassword(password)
   const pending = await PendingSignup.findOneAndUpdate(
     { email },
-    { $set: { name, iv, tag, ciphertext, createdAt: new Date() } },
+    { $set: { name, iv, tag, ciphertext, keyHash: hashKey(key), consumedAt: null, createdAt: new Date() } },
     { upsert: true, new: true }
   )
 

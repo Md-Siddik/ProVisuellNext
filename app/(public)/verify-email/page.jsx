@@ -7,6 +7,7 @@ import { CircleAlert, CircleCheck, LoaderCircle, MailCheck } from "lucide-react"
 import { useAuth } from "@/context/AuthContext"
 import { confirmSignup, sendVerificationEmail, logout, friendlyAuthError } from "@/lib/firebaseAuth"
 import { useTranslation } from "@/lib/i18n"
+import { useCooldown } from "@/hooks/useCooldown"
 
 // Two jobs:
 //  - ?token=… — the link from our signup email. Confirming it is what
@@ -36,7 +37,7 @@ function ConfirmSignup({ token }) {
     if (started.current) return
     started.current = true
     confirmSignup(token)
-      .then(({ email }) => setState({ status: "done", email, error: "" }))
+      .then(({ email, alreadyVerified }) => setState({ status: "done", email, error: "", alreadyVerified: Boolean(alreadyVerified) }))
       .catch((err) => setState({ status: "failed", email: "", error: err.message || t("authErrors.generic") }))
   }, [token, t])
 
@@ -54,7 +55,7 @@ function ConfirmSignup({ token }) {
 
         {state.status === "done" && (
           <>
-            <h1 className="mt-[22px] text-[26px] font-[800] tracking-[-0.02em]">{t("verifyEmail.confirmedTitle")}</h1>
+            <h1 className="mt-[22px] text-[26px] font-[800] tracking-[-0.02em]">{state.alreadyVerified ? t("verifyEmail.alreadyVerifiedTitle") : t("verifyEmail.confirmedTitle")}</h1>
             <p className="mt-[10px] text-[14px] leading-[1.5] text-white/60">{t("verifyEmail.confirmedText", { email: state.email })}</p>
             <Link
               href={`/login?email=${encodeURIComponent(state.email)}`}
@@ -95,6 +96,8 @@ function PendingVerification() {
   const [checking, setChecking] = useState(false)
   const [resending, setResending] = useState(false)
   const [error, setError] = useState("")
+  // One resend a minute per account, kept across reloads.
+  const cooldown = useCooldown(firebaseUser ? `verify_${firebaseUser.uid}` : null, 60)
 
   // react-router's declarative <Navigate> has no App Router equivalent for
   // a Client Component render-time redirect — this effect mirrors what it
@@ -108,13 +111,19 @@ function PendingVerification() {
   if (loading || !firebaseUser || !needsEmailVerification) return null
 
   const handleResend = async () => {
+    if (cooldown.left > 0) return
     setError("")
     setResent(false)
     setResending(true)
     try {
+      // Fresh state first — if they already verified in another tab, finish
+      // instead of mailing another link.
+      if (await recheckEmailVerification()) return
       await sendVerificationEmail(firebaseUser)
+      cooldown.start()
       setResent(true)
     } catch (err) {
+      if (err?.code === "auth/too-many-requests") cooldown.start()
       setError(friendlyAuthError(err))
     } finally {
       setResending(false)
@@ -174,10 +183,14 @@ function PendingVerification() {
           <button
             type="button"
             onClick={handleResend}
-            disabled={resending}
+            disabled={resending || cooldown.left > 0}
             className="flex h-[46px] items-center justify-center rounded-[10px] border border-white/15 bg-white/[0.03] text-[13px] font-[700] text-white transition hover:bg-white/[0.07] disabled:opacity-50"
           >
-            {resending ? t("verifyEmail.resending") : t("verifyEmail.resend")}
+            {resending
+              ? t("verifyEmail.resending")
+              : cooldown.left > 0
+                ? t("verifyEmail.resendIn", { n: cooldown.left })
+                : t("verifyEmail.resend")}
           </button>
           <button
             type="button"

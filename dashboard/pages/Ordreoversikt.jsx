@@ -17,6 +17,7 @@ import { api } from "@/lib/api"
 import CreateInvoiceModal from "../components/CreateInvoiceModal"
 import InvoicePreviewOverlay from "../components/InvoicePreviewOverlay"
 import { useTranslation } from "@/lib/i18n"
+import AddNoteButton from "@/components/notes/AddNoteButton"
 
 const TABS = [
   { key: "all", labelKey: "orderOverviewPage.tabAll" },
@@ -134,14 +135,24 @@ function PaginationButton({
 
 export default function Ordreoversikt() {
   const { t } = useTranslation()
-  const { role } = useAuth()
+  const { can } = useAuth()
   const router = useRouter()
   // Both roles can decide orders — admin registers them, owner or admin
   // can approve/reject/complete them.
-  const canDecide = role === "owner" || role === "administrator"
+  // Visibility only — the API checks orders.approve/.reject/.complete itself.
+  const canApprove = can("orders.approve")
+  const canReject = can("orders.reject")
+  const canComplete = can("orders.complete")
+  const canInvoice = can("invoices.view") || can("invoices.create")
+  const canDecide = canApprove || canReject || canComplete || canInvoice
 
   const [tab, setTab] = useState("all")
   const [search, setSearch] = useState("")
+  // ?search= prefills the search (e.g. "Open record" on a note).
+  useEffect(() => {
+    const fromUrl = new URLSearchParams(window.location.search).get("search")
+    if (fromUrl) setSearch(fromUrl)
+  }, [])
   const [page, setPage] = useState(1)
 
   const [orders, setOrders] = useState([])
@@ -304,6 +315,7 @@ export default function Ordreoversikt() {
     }
     if (order.status !== "completed") return null
     if (order.invoice) {
+      if (!can("invoices.view")) return null
       const isPaid = order.invoice.status === "paid"
       return (
         <ActionButton
@@ -317,6 +329,7 @@ export default function Ordreoversikt() {
         </ActionButton>
       )
     }
+    if (!can("invoices.create")) return null
     return (
       <ActionButton
         title={t("orderOverviewPage.createInvoiceTooltip")}
@@ -340,8 +353,10 @@ export default function Ordreoversikt() {
     }
 
     if (order.status === "pending") {
+      if (!canApprove && !canReject) return null
       return (
         <div className="flex items-center gap-[10px]">
+          {canApprove && (
           <ActionButton
             title={t("orderOverviewPage.approveTooltip")}
             variant="orange"
@@ -351,7 +366,9 @@ export default function Ordreoversikt() {
           >
             <Check size={20} strokeWidth={2} />
           </ActionButton>
+          )}
 
+          {canReject && (
           <ActionButton
             title={t("orderOverviewPage.rejectTooltip")}
             variant="red"
@@ -361,11 +378,13 @@ export default function Ordreoversikt() {
           >
             <X size={20} strokeWidth={2} />
           </ActionButton>
+          )}
         </div>
       )
     }
 
     if (order.status === "rejected") {
+      if (!canApprove) return null
       return (
         <ActionButton
           title={t("orderOverviewPage.approveAgainTooltip")}
@@ -385,6 +404,7 @@ export default function Ordreoversikt() {
     }
 
     if (order.status === "approved") {
+      if (!canComplete) return null
       return (
         <ActionButton
           title={t("orderOverviewPage.markCompletedTooltip")}
@@ -558,7 +578,10 @@ export default function Ordreoversikt() {
                     className="h-[62px] border-b border-white/[0.075] transition-colors last:border-b-0 hover:bg-white/[0.015]"
                   >
                     <td className="px-[19px] text-[14px] font-[450] text-white/75">
-                      #{order.orderNumber}
+                      <span className="inline-flex items-center gap-[10px]">
+                        #{order.orderNumber}
+                        <AddNoteButton type="order" id={order._id} variant="icon" />
+                      </span>
                     </td>
 
                     <td className="px-[19px] text-[14px] text-white/78">

@@ -5,6 +5,7 @@ import { getLocale } from "@/lib/i18n/locale"
 import { Plus } from "lucide-react"
 import { api } from "@/lib/api"
 import { useTranslation } from "@/lib/i18n"
+import AddNoteButton from "@/components/notes/AddNoteButton"
 
 // Stored/matched values stay Norwegian regardless of UI language — the
 // server string-matches "Direkte kostnader" for gross-profit aggregation
@@ -171,19 +172,20 @@ export default function Utgifter() {
               <th className="px-[18px] py-[13px] font-[600]">{t("expensesPage.category")}</th>
               <th className="px-[18px] py-[13px] font-[600]">{t("expensesPage.tableNote")}</th>
               <th className="px-[18px] py-[13px] font-[600]">{t("common.amount")}</th>
+              <th className="w-[1%] px-[12px] py-[13px]" aria-label={t("notesPage.notes")} />
             </tr>
           </thead>
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={4} className="px-[18px] py-[20px] text-center text-white/40">
+                <td colSpan={5} className="px-[18px] py-[20px] text-center text-white/40">
                   {t("expensesPage.loadingExpenses")}
                 </td>
               </tr>
             )}
             {!loading && expenses.length === 0 && (
               <tr>
-                <td colSpan={4} className="px-[18px] py-[20px] text-center text-white/40">
+                <td colSpan={5} className="px-[18px] py-[20px] text-center text-white/40">
                   {t("expensesPage.noExpenses")}
                 </td>
               </tr>
@@ -194,6 +196,9 @@ export default function Utgifter() {
                 <td className="px-[18px] py-[13px] text-white/80">{t(CATEGORY_LABEL_KEYS[e.category]) || e.category}</td>
                 <td className="px-[18px] py-[13px] text-white/50">{e.note || "—"}</td>
                 <td className="px-[18px] py-[13px] font-[700] text-white">{nok(e.amount)}</td>
+                <td className="px-[12px] py-[8px]">
+                  <AddNoteButton type="expense" id={e._id} variant="icon" />
+                </td>
               </tr>
             ))}
           </tbody>

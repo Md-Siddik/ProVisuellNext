@@ -1,7 +1,9 @@
 "use client"
 
 import { useRef, useState } from "react"
+import Link from "next/link"
 import { useTranslation } from "@/lib/i18n"
+import { useCookieConsent } from "@/context/CookieConsentContext"
 import EditableText from "../dashboard/editor/EditableText"
 import EditableImage from "../dashboard/editor/EditableImage"
 import { useEditorMode } from "../dashboard/editor/EditorModeContext"
@@ -117,6 +119,8 @@ const NorwayMap = () => {
         k="footer.mapImage"
         fallbackSrc={NORWAY_MAP_FALLBACK}
         alt={t("footer.mapAlt")}
+        loading="lazy"
+        decoding="async"
         draggable="false"
         className="norway-map-anim pointer-events-none h-full w-full select-none object-contain transition-transform duration-500 group-hover:scale-[1.05]"
       />
@@ -142,6 +146,7 @@ const NorwayMap = () => {
 
 const Footer = () => {
   const { t } = useTranslation()
+  const { openSettings: openCookieSettings } = useCookieConsent()
   const { enabled } = useEditorMode()
   const { items: socialLinks, addItem, updateItem, deleteItem, reorder } = useCmsCollection("socialLinks")
   const [editingSocial, setEditingSocial] = useState(null)
@@ -376,7 +381,7 @@ const Footer = () => {
               </a>
 
               <a
-                href="mailto:post@provisuell.no"
+                href={`mailto:${t("footer.email").trim()}`}
                 className="flex items-center gap-[10px] transition-colors hover:text-[#ff4b00]"
               >
                 <MailIcon />
@@ -384,7 +389,7 @@ const Footer = () => {
               </a>
 
               <a
-                href="tel:+4712345678"
+                href={`tel:${t("footer.phone").replace(/[^\d+]/g, "")}`}
                 className="flex items-center gap-[10px] transition-colors hover:text-[#ff4b00]"
               >
                 <PhoneIcon />
@@ -399,11 +404,13 @@ const Footer = () => {
         </div>
 
         <div className="flex min-h-[29px] items-center justify-between border-t border-white/[0.08] py-[18px] text-[12px] text-[#a9a9a9] max-md:flex-col max-md:gap-[12px] max-md:py-[15px]">
+          {/* Year and company are shared by every language; only the
+              "All rights reserved" sentence is translated. */}
           <p>
-            <EditableText k="footer.copyright" />
+            © <EditableText k="footer.copyrightYear" /> <EditableText k="footer.companyName" />. <EditableText k="footer.rightsReserved" />
           </p>
 
-          <div className="flex items-center gap-[25px]">
+          <div className="flex flex-wrap items-center justify-center gap-x-[25px] gap-y-[10px]">
             <a
               href="#privacy"
               className="transition-colors hover:text-white"
@@ -419,6 +426,20 @@ const Footer = () => {
             >
               <EditableText k="footer.terms" />
             </a>
+
+            <span className="h-[17px] w-px bg-white/35" />
+
+            {/* Cookie texts come from the translations, not the Website
+                Editor — they describe what the site actually stores. */}
+            <Link href="/cookies" className="transition-colors hover:text-white focus-visible:outline-2 focus-visible:outline-[#ff4b00]">
+              {t("cookies.policyLink")}
+            </Link>
+
+            <span className="h-[17px] w-px bg-white/35" />
+
+            <button type="button" onClick={openCookieSettings} className="transition-colors hover:text-white focus-visible:outline-2 focus-visible:outline-[#ff4b00]">
+              {t("cookies.settingsLink")}
+            </button>
           </div>
         </div>
       </div>

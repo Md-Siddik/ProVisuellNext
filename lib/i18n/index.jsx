@@ -9,6 +9,8 @@ import { da } from "./locales/da"
 import { api } from "../api"
 import { usePathname } from "next/navigation"
 import { setActiveLocale } from "./locale"
+import { SHARED_DEFAULTS } from "../siteContent"
+import { getPreference, removePreference, setPreference } from "../cookieConsent/preferenceStorage"
 
 // Norwegian is the required-complete source of truth (see locales/no.js) —
 // every other language falls back to it for any key it hasn't got yet, so
@@ -28,7 +30,8 @@ const STORAGE_KEY = "provisuell_language"
 
 function getStoredLanguage() {
   try {
-    const v = localStorage.getItem(STORAGE_KEY)
+    // A "preferences" item: remembered across visits only with consent.
+    const v = getPreference(STORAGE_KEY)
     return DICTS[v] ? v : "no"
   } catch {
     return "no"
@@ -50,9 +53,10 @@ export function I18nProvider({ children }) {
   // already current when the children below render.
   setActiveLocale(language)
   const [hydrated, setHydrated] = useState(false)
-  // CMS overrides from the Website Editor, keyed by contentKey. Text overrides
-  // are language-scoped server-side (only the current language's rows come
-  // back); image/video overrides have no language and apply to everyone.
+  // CMS overrides from the Website Editor, keyed by contentKey. Translatable
+  // text is language-scoped server-side (only the current language's rows
+  // come back); shared text (contact details, copyright year — see
+  // lib/siteContent.js) and image/video have no language and apply to everyone.
   const [overrides, setOverrides] = useState({})
 
   useEffect(() => {
@@ -76,17 +80,17 @@ export function I18nProvider({ children }) {
   const setLanguage = useCallback((lang) => {
     if (!DICTS[lang]) return
     setLanguageState(lang)
-    try {
-      if (lang === "no") localStorage.removeItem(STORAGE_KEY)
-      else localStorage.setItem(STORAGE_KEY, lang)
-    } catch {
-      // storage unavailable (private mode / quota) — selection just won't persist
-    }
+    // Remembered across visits only with "preferences" cookie consent;
+    // otherwise for this visit only (lib/cookieConsent/preferenceStorage.js).
+    if (lang === "no") removePreference(STORAGE_KEY)
+    else setPreference(STORAGE_KEY, lang)
   }, [])
 
   const t = useCallback(
     (key, vars) => {
       let str = overrides[key]
+      // Shared values have one built-in default for every language.
+      if (str === undefined) str = SHARED_DEFAULTS[key]
       if (str === undefined) str = lookup(DICTS[language], key)
       if (str === undefined) str = lookup(no, key)
       if (str === undefined) return key
@@ -113,8 +117,8 @@ export function I18nProvider({ children }) {
   }, [hydrated, language, t, pathname])
 
   const value = useMemo(
-    () => ({ language, setLanguage, t, getMedia, refreshContent }),
-    [language, setLanguage, t, getMedia, refreshContent]
+    () => ({ language, setLanguage, t, getMedia, refreshContent, hydrated }),
+    [language, setLanguage, t, getMedia, refreshContent, hydrated]
   )
 
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>

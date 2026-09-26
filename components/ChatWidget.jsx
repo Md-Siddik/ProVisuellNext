@@ -8,9 +8,12 @@ import { AlertCircle, CalendarClock, Mail, MessageSquare, Send, ShoppingBag, X }
 import { chatStorage } from "@/lib/chatStorage"
 import { useAuth } from "@/context/AuthContext"
 import { api } from "@/lib/api"
+import { isTabHidden } from "@/hooks/useSharedPoll"
 import { getDisplayName } from "@/lib/displayName"
-import BookMeetingModal from "./BookMeetingModal"
-import EmailComposeModal from "./EmailComposeModal"
+import dynamic from "next/dynamic"
+// Loaded when first opened, not with every public page.
+const BookMeetingModal = dynamic(() => import("./BookMeetingModal"), { ssr: false })
+const EmailComposeModal = dynamic(() => import("./EmailComposeModal"), { ssr: false })
 import LoginRequiredModal from "./LoginRequiredModal"
 import UnreadBadge from "./UnreadBadge"
 import { useUnreadMessages } from "@/hooks/useUnreadMessages"
@@ -70,7 +73,7 @@ const ChatWidget = () => {
   // own — this same bottom-right bubble instead becomes their shortcut to
   // the real customer inbox, badge included, so there's one message icon
   // in the corner rather than a second one bolted on elsewhere.
-  const isStaff = role === "owner" || role === "administrator"
+  const isStaff = ["owner", "administrator", "moderator", "superadmin"].includes(role)
   const staffUnreadCount = useUnreadMessages()
   const [open, setOpen] = useState(false)
   const [messages, setMessages] = useState([])
@@ -117,12 +120,12 @@ const ChatWidget = () => {
           console.error("Failed to load conversation:", err.message)
         }
       } else {
-        chatStorage.getVisitorId()
+        // Nothing is written to the browser until the visitor actually sends
+        // a message (the send path saves the thread) — just opening a page
+        // stores nothing. See lib/cookieConsent/config.js.
         const stored = chatStorage.loadMessages()
         if (stored.length === 0) {
-          const seeded = [{ id: "welcome", sender: "system", text: t("chatWidget.welcomeMessage"), time: new Date().toISOString() }]
-          setMessages(seeded)
-          chatStorage.saveMessages(seeded)
+          setMessages([{ id: "welcome", sender: "system", text: t("chatWidget.welcomeMessage"), time: new Date().toISOString() }])
         } else {
           setMessages(stored)
         }
@@ -140,6 +143,7 @@ const ChatWidget = () => {
     if (!open || !hasAccount || isStaff) return
     const interval = setInterval(async () => {
       if (sendingRef.current) return // a send is in flight — let it settle first
+      if (isTabHidden()) return // nobody's looking; the next visible tick catches up
       const seq = ++requestSeqRef.current
       try {
         const { conversation } = await api.get("/messages/mine")
@@ -163,6 +167,7 @@ const ChatWidget = () => {
     }
     let cancelled = false
     const check = async () => {
+      if (isTabHidden()) return
       try {
         const { count } = await api.get("/messages/mine/unread")
         if (!cancelled) setUnreadCount(count || 0)

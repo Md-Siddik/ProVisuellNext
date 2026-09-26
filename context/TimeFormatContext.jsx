@@ -4,6 +4,8 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { useAuth } from "@/context/AuthContext"
 import { api } from "@/lib/api"
 import { getLocale } from "@/lib/i18n/locale"
+import { useTranslation } from "@/lib/i18n"
+import { getPreference, setPreference } from "@/lib/cookieConsent/preferenceStorage"
 import {
   DEFAULT_TIME_FORMAT,
   formatAppointmentTime,
@@ -25,7 +27,7 @@ export const TIME_FORMAT_STORAGE_KEY = "provisuell_time_format"
 
 function readStored() {
   try {
-    const v = localStorage.getItem(TIME_FORMAT_STORAGE_KEY)
+    const v = getPreference(TIME_FORMAT_STORAGE_KEY)
     return isTimeFormat(v) ? v : null
   } catch {
     return null
@@ -33,11 +35,8 @@ function readStored() {
 }
 
 function writeStored(value) {
-  try {
-    localStorage.setItem(TIME_FORMAT_STORAGE_KEY, value)
-  } catch {
-    // storage unavailable (private mode / quota) — the choice just won't persist
-  }
+  // A "preferences" item: remembered across visits only with cookie consent.
+  setPreference(TIME_FORMAT_STORAGE_KEY, value)
 }
 
 const TimeFormatContext = createContext(null)
@@ -48,6 +47,21 @@ export function TimeFormatProvider({ children }) {
   const [timeFormat, setTimeFormatState] = useState(DEFAULT_TIME_FORMAT)
   const { profile } = useAuth()
   const syncedFor = useRef(null)
+  const { language, hydrated } = useTranslation()
+  const languageSent = useRef(null)
+
+  // Keep the account's language in step with the one picked on the site, so
+  // emails (invoices, meeting changes) reach the customer in that language.
+  useEffect(() => {
+    if (!hydrated || !profile?._id) return
+    const key = `${profile._id}:${language}`
+    if (languageSent.current === key) return
+    languageSent.current = key
+    if (profile.language === language) return
+    api.patch("/auth/preferences", { language }).catch(() => {
+      languageSent.current = null
+    })
+  }, [hydrated, profile, language])
 
   useEffect(() => {
     const stored = readStored()

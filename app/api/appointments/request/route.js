@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { authenticate, withApiErrors, ApiError } from "@/lib/auth"
 import { Appointment } from "@/lib/models/Appointment"
+import { meetingRoomUrl } from "@/lib/meeting"
 import { notifyRole } from "@/lib/notify"
 import { notifyBusiness, sendEmail } from "@/lib/mailer"
 import { bookSlot, bookingFromInstants, slotUnavailable } from "@/lib/appointments/availabilityService"
@@ -44,6 +45,8 @@ export const POST = withApiErrors(async (request) => {
         requestedByEmail: user.email,
         requestedBy: user._id,
         notes: notes ? String(notes).slice(0, 2000) : "",
+        // Kept server-side; released only by the join endpoint at meeting time.
+        meetingUrl: meetingRoomUrl(),
       }),
   })
 
@@ -57,6 +60,12 @@ export const POST = withApiErrors(async (request) => {
     link: "/dashboard/owner/ansattmoter",
   })
   notifyRole("administrator", {
+    type: "appointment_booked",
+    title: "Ny avtale booket",
+    message,
+    link: "/dashboard/admin/ansattmoter",
+  })
+  notifyRole("moderator", {
     type: "appointment_booked",
     title: "Ny avtale booket",
     message,
@@ -77,5 +86,7 @@ export const POST = withApiErrors(async (request) => {
     text: `Kunde: ${appointment.requestedByName}\nE-post: ${appointment.requestedByEmail || "—"}\nTidspunkt: ${when}\nTittel: ${appointment.title}${appointment.notes ? `\nNotat: ${appointment.notes}` : ""}`,
   })
 
-  return NextResponse.json({ appointment }, { status: 201 })
+  // Never echo the meeting URL back — it's only released at join time.
+  const { meetingUrl: _omit, ...safe } = appointment.toObject()
+  return NextResponse.json({ appointment: safe }, { status: 201 })
 })

@@ -1,11 +1,10 @@
 import { NextResponse } from "next/server"
 import mongoose from "mongoose"
-import { ApiError, authenticate, requireRole, withApiErrors } from "@/lib/auth"
+import { ApiError, authenticate, withApiErrors } from "@/lib/auth"
+import { requirePermission } from "@/lib/access"
 import { connectDB } from "@/lib/db"
 import { AvailabilityOverride } from "@/lib/models/AvailabilityOverride"
 import { cleanOverride } from "@/lib/appointments/availabilityService"
-
-const STAFF = ["owner", "administrator"]
 
 async function load(params) {
   const { id } = await params
@@ -18,8 +17,7 @@ async function load(params) {
 
 // Edit a rule, or just switch it on/off with { active }.
 export const PATCH = withApiErrors(async (request, { params }) => {
-  const { user } = await authenticate(request)
-  requireRole(user, STAFF)
+  const { user } = requirePermission(await authenticate(request), "appointments.manageAvailability")
   const override = await load(params)
   const body = (await request.json().catch(() => ({}))) || {}
   const onlyActive = Object.keys(body).length === 1 && "active" in body
@@ -34,8 +32,7 @@ export const PATCH = withApiErrors(async (request, { params }) => {
 })
 
 export const DELETE = withApiErrors(async (request, { params }) => {
-  const { user } = await authenticate(request)
-  requireRole(user, STAFF)
+  requirePermission(await authenticate(request), "appointments.manageAvailability")
   const override = await load(params)
   await override.deleteOne()
   return NextResponse.json({ ok: true })

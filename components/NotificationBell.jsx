@@ -24,7 +24,7 @@ const TITLE_KEYS = {
   "Ny e-post fra nettsiden": "notifications.titleContactEmail",
 }
 
-const LOCALE_MAP = { no: "no-NO", en: "en-US", sv: "sv-SE", fi: "fi-FI", da: "da-DK" }
+const LOCALE_MAP = { no: "no-NO", en: "en-US", sv: "sv-SE", fi: "fi-FI", da: "da-DK", ro: "ro-RO" }
 
 // Shared between the public Header and the dashboard topbar — every place
 // an authenticated user can see notifications reads from the same API.

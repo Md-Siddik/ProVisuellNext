@@ -6,6 +6,7 @@ import { en } from "./locales/en"
 import { sv } from "./locales/sv"
 import { fi } from "./locales/fi"
 import { da } from "./locales/da"
+import { ro } from "./locales/ro"
 import { api } from "../api"
 import { usePathname } from "next/navigation"
 import { setActiveLocale } from "./locale"
@@ -15,17 +16,18 @@ import { getPreference, removePreference, setPreference } from "../cookieConsent
 // Norwegian is the required-complete source of truth (see locales/no.js) —
 // every other language falls back to it for any key it hasn't got yet, so
 // the UI never shows a raw key or silently falls back to English.
-const DICTS = { no, en, sv, fi, da }
+const DICTS = { no, en, sv, fi, da, ro }
 
 export const LANGUAGES = [
-  { code: "no", label: "NO" },
-  { code: "en", label: "EN" },
-  { code: "sv", label: "SV" },
-  { code: "fi", label: "FI" },
-  { code: "da", label: "DA" },
+  { code: "no", label: "NO", name: "Norsk" },
+  { code: "en", label: "EN", name: "English" },
+  { code: "sv", label: "SV", name: "Svenska" },
+  { code: "fi", label: "FI", name: "Suomi" },
+  { code: "da", label: "DA", name: "Dansk" },
+  { code: "ro", label: "RO", name: "Română" },
 ]
 
-const HTML_LANG = { no: "nb", en: "en", sv: "sv", fi: "fi", da: "da" }
+const HTML_LANG = { no: "nb", en: "en", sv: "sv", fi: "fi", da: "da", ro: "ro" }
 const STORAGE_KEY = "provisuell_language"
 
 function getStoredLanguage() {

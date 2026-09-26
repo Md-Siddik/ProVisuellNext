@@ -27,6 +27,7 @@ import {
 } from "lucide-react"
 import Logo from "../components/Logo"
 import NotificationBell from "../components/NotificationBell"
+import LanguageSelector from "../components/LanguageSelector"
 import UnreadBadge from "../components/UnreadBadge"
 import { useAuth } from "@/context/AuthContext"
 import { logout } from "@/lib/firebaseAuth"
@@ -211,6 +212,7 @@ export default function DashboardLayout({ children }) {
         </nav>
 
         <div className="mt-auto flex shrink-0 flex-col gap-[4px] border-t border-white/[0.08] pt-[14px]">
+          <LanguageSelector variant="menu" className="px-[14px] pb-[8px]" />
           <button
             onClick={() => logout()}
             className="flex items-center gap-[12px] rounded-[10px] px-[14px] py-[11px] text-[14px] font-[600] text-white/50 transition-colors hover:bg-white/[0.05] hover:text-white"
@@ -252,6 +254,9 @@ export default function DashboardLayout({ children }) {
                 <span className="hidden sm:inline">{t("notesPage.quickNote")}</span>
               </button>
             )}
+            <div className="hidden md:block">
+              <LanguageSelector />
+            </div>
             <NotificationBell />
             <div className="flex items-center gap-[10px]">
               <div className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-full bg-[#ff4b00]/15 text-[13px] font-[700] text-[#ff4b00]">

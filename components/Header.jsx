@@ -8,7 +8,8 @@ import { logout } from "@/lib/firebaseAuth"
 import { getDisplayName } from "@/lib/displayName"
 import { OPEN_ORDER_EVENT } from "./StartOrderModal"
 import NotificationBell from "./NotificationBell"
-import { useTranslation, LANGUAGES } from "@/lib/i18n"
+import { useTranslation } from "@/lib/i18n"
+import LanguageSelector from "./LanguageSelector"
 import EditableText from "../dashboard/editor/EditableText"
 import { useEditorMode } from "../dashboard/editor/EditorModeContext"
 import { useCmsCollection } from "../dashboard/editor/useCmsCollection"
@@ -79,7 +80,7 @@ const Header = () => {
   // Pending email verification is a Firebase session with no application
   // access yet — don't let the bell fire an authenticated fetch for it.
   const showNotifications = isAuthenticated && !needsEmailVerification
-  const { language, setLanguage, t } = useTranslation()
+  const { t } = useTranslation()
   const { enabled } = useEditorMode()
   const { items: navLinks, addItem, updateItem, deleteItem, reorder } = useCmsCollection("headerNav")
   const [editingNavItem, setEditingNavItem] = useState(null)
@@ -124,23 +125,7 @@ const Header = () => {
         <Logo />
 
         <div className="hidden items-center lg:flex">
-          <div
-            translate="no"
-            className="notranslate mr-[27px] flex items-center gap-[7px] text-[11px] font-[600] uppercase tracking-[0.07em]"
-          >
-            {LANGUAGES.map((lng, i) => (
-              <div key={lng.code} className="flex items-center gap-[7px]">
-                {i > 0 && <span className="text-white/35">/</span>}
-                <button
-                  type="button"
-                  onClick={() => setLanguage(lng.code)}
-                  className={`transition-colors duration-200 hover:text-white ${language === lng.code ? "text-white" : "text-white/60"}`}
-                >
-                  {lng.label}
-                </button>
-              </div>
-            ))}
-          </div>
+          <LanguageSelector className="mr-[27px]" />
 
           <nav className="flex items-center gap-[25px] xl:gap-[29px]">
             {navLinks.map((item, index) => {
@@ -326,19 +311,7 @@ const Header = () => {
             </button>
           )}
 
-          <div
-            translate="no"
-            className="notranslate flex flex-wrap items-center gap-[10px] border-b border-white/10 py-[16px] text-[13px] font-[700] uppercase tracking-[0.05em]"
-          >
-            {LANGUAGES.map((lng, i) => (
-              <div key={lng.code} className="flex items-center gap-[10px]">
-                {i > 0 && <span className="text-white/25">/</span>}
-                <button type="button" onClick={() => setLanguage(lng.code)} className={language === lng.code ? "text-white" : "text-white/50"}>
-                  {lng.label}
-                </button>
-              </div>
-            ))}
-          </div>
+          <LanguageSelector variant="menu" className="border-b border-white/10 py-[16px]" />
 
           {isAuthenticated ? (
             <>

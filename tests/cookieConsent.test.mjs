@@ -84,7 +84,7 @@ test("no integrations are registered; unsafe entries could never load", () => {
 })
 
 test("every language has every cookie text", async () => {
-  const LANGS = ["no", "en", "sv", "fi", "da"]
+  const LANGS = ["no", "en", "sv", "fi", "da", "ro"]
   const needed = [
     "settingsLink", "policyLink", "bannerTitle", "bannerText", "readMore", "acceptAll", "onlyNecessary", "customize",
     "preferencesTitle", "preferencesIntro", "savePreferences", "alwaysActive", "close", "back", "on", "off",

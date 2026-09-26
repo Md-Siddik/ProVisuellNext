@@ -7,7 +7,7 @@ import { BlogMedia } from "@/lib/models/BlogMedia"
 
 export const DELETE = withApiErrors(async (request, { params }) => {
   const { id } = await params
-  await requireBlogAdmin(request)
+  await requireBlogAdmin(request, "blog.delete")
   assertObjectId(id)
   const media = await BlogMedia.findByIdAndDelete(id)
   if (!media) throw new ApiError(404, "Not found")

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { ApiError, withApiErrors } from "@/lib/auth"
-import { isBlogAdmin, optionalAuth, requireBlogAdmin } from "@/lib/blog/access"
+import { assertCanPublish, isBlogAdmin, optionalAuth, requireBlogAdmin } from "@/lib/blog/access"
 import { assertObjectId, buildPostFields } from "@/lib/blog/mutations"
 import { categoryMapFor, findPublicPost, serializePost } from "@/lib/blog/queries"
 import { BlogComment } from "@/lib/models/BlogComment"
@@ -14,7 +14,7 @@ export const GET = withApiErrors(async (request, { params }) => {
   const { id } = await params
   const auth = await optionalAuth(request)
   let doc = await findPublicPost(id)
-  if (!doc && isBlogAdmin(auth?.user)) {
+  if (!doc && isBlogAdmin(auth)) {
     doc = /^[a-f0-9]{24}$/i.test(id) ? await BlogPost.findById(id).lean() : await BlogPost.findOne({ slug: id.toLowerCase() }).lean()
   }
   if (!doc) throw new ApiError(404, "Not found")
@@ -25,13 +25,14 @@ export const GET = withApiErrors(async (request, { params }) => {
 
 export const PATCH = withApiErrors(async (request, { params }) => {
   const { id } = await params
-  await requireBlogAdmin(request)
+  const auth = await requireBlogAdmin(request, "blog.edit")
   assertObjectId(id)
   const existing = await BlogPost.findById(id)
   if (!existing) throw new ApiError(404, "Not found")
 
   const body = await request.json().catch(() => ({}))
   const fields = await buildPostFields(body, existing)
+  assertCanPublish(auth, fields.status, existing.status)
 
   // A renamed slug keeps working: the old one is remembered and redirects.
   if (fields.slug && fields.slug !== existing.slug) {
@@ -48,7 +49,7 @@ export const PATCH = withApiErrors(async (request, { params }) => {
 
 export const DELETE = withApiErrors(async (request, { params }) => {
   const { id } = await params
-  await requireBlogAdmin(request)
+  await requireBlogAdmin(request, "blog.delete")
   assertObjectId(id)
   await connectDB()
   const post = await BlogPost.findByIdAndDelete(id)

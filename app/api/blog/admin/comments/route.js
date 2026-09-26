@@ -8,7 +8,7 @@ import { BlogPost } from "@/lib/models/BlogPost"
 
 // Moderation queue: every comment in every status, with the post it belongs to.
 export const GET = withApiErrors(async (request) => {
-  await requireBlogAdmin(request)
+  await requireBlogAdmin(request, "blog.moderateComments")
   const sp = new URL(request.url).searchParams
   const filter = {}
   if (["approved", "pending", "hidden", "spam"].includes(sp.get("status"))) filter.status = sp.get("status")

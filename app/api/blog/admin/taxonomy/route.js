@@ -8,7 +8,7 @@ import { BlogTag } from "@/lib/models/BlogTag"
 // All categories and tags (including unused ones) with how many posts use
 // each, for the management screens and the post editor's pickers.
 export const GET = withApiErrors(async (request) => {
-  await requireBlogAdmin(request)
+  await requireBlogAdmin(request, "blog.view")
   const [categories, tags, categoryCounts, tagCounts] = await Promise.all([
     BlogCategory.find().sort({ name: 1 }).lean(),
     BlogTag.find().sort({ name: 1 }).lean(),

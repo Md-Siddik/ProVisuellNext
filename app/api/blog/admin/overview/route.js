@@ -14,7 +14,7 @@ function dayKey(d) {
 // One call feeds both the Overview and Analytics screens. Everything comes
 // from the blog's own collections — no separate tracking.
 export const GET = withApiErrors(async (request) => {
-  await requireBlogAdmin(request)
+  await requireBlogAdmin(request, "blog.analytics", "blog.view")
   const now = new Date()
   const since = new Date(now.getTime() - 13 * DAY)
   since.setUTCHours(0, 0, 0, 0)

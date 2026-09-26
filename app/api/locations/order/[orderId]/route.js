@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { authenticate, withApiErrors, ApiError } from "@/lib/auth"
+import { can } from "@/lib/access"
 import { CustomerLocation } from "@/lib/models/CustomerLocation"
 import { Order } from "@/lib/models/Order"
 
@@ -24,10 +25,12 @@ function isValidGoogleMapsUrl(url) {
   }
 }
 
-async function loadOwnedOrder(user, orderId) {
+// The order's own customer, or staff allowed to see precise customer locations.
+async function loadOwnedOrder(auth, orderId, { allowStaff = true } = {}) {
   const order = await Order.findById(orderId)
   if (!order) throw new ApiError(404, "Order not found")
-  if (user.role === "customer" && String(order.customerId) !== String(user._id)) {
+  const own = String(order.customerId) === String(auth.user._id)
+  if (!own && !(allowStaff && can(auth, "customers.viewLocation"))) {
     throw new ApiError(403, "Not your order")
   }
   return order
@@ -39,10 +42,12 @@ async function loadOwnedOrder(user, orderId) {
 // from the request body.
 export const PUT = withApiErrors(async (request, { params }) => {
   const { orderId } = await params
-  const { user } = await authenticate(request)
-  if (user.role !== "customer") throw new ApiError(403, "Only a customer can share their own order's location")
-
-  const order = await loadOwnedOrder(user, orderId)
+  const auth = await authenticate(request)
+  const { user } = auth
+  // Only the order's own customer can share a location for it.
+  const order = await loadOwnedOrder(auth, orderId, { allowStaff: false }).catch(() => {
+    throw new ApiError(403, "Only a customer can share their own order's location")
+  })
 
   const { lat, lng, locationAccuracy, locatedAt, googleMapsShareUrl } = (await request.json().catch(() => ({}))) || {}
   const latNum = Number(lat)
@@ -85,8 +90,8 @@ export const PUT = withApiErrors(async (request, { params }) => {
 // order" link from the staff list to work both ways).
 export const GET = withApiErrors(async (request, { params }) => {
   const { orderId } = await params
-  const { user } = await authenticate(request)
-  const order = await loadOwnedOrder(user, orderId)
+  const auth = await authenticate(request)
+  const order = await loadOwnedOrder(auth, orderId)
 
   const location = await CustomerLocation.findOne({ order: order._id })
   return NextResponse.json({ location: location || null })

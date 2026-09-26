@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
-import { authenticate, requireRole, withApiErrors } from "@/lib/auth"
+import { authenticate, withApiErrors } from "@/lib/auth"
+import { requirePermission } from "@/lib/access"
 import { CmsItem } from "@/lib/models/CmsItem"
 import { connectDB } from "@/lib/db"
 import { assertValidCollection, resolveTranslations } from "@/lib/cmsHelpers"
@@ -29,8 +30,7 @@ export const GET = withApiErrors(async (request, { params }) => {
 export const POST = withApiErrors(async (request, { params }) => {
   const { collection } = await params
   assertValidCollection(collection)
-  const { user } = await authenticate(request)
-  requireRole(user, ["administrator"])
+  const { user } = requirePermission(await authenticate(request), "cms.edit")
 
   const { language, fields, link, image, video, published } = (await request.json().catch(() => ({}))) || {}
   const translations = {}

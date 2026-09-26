@@ -1,16 +1,19 @@
 import { NextResponse } from "next/server"
-import { authenticate, requireRole, withApiErrors, ApiError } from "@/lib/auth"
+import { authenticate, withApiErrors, ApiError } from "@/lib/auth"
+import { CUSTOMER_CONTACT_FIELDS, can, redact, requirePermission } from "@/lib/access"
 import { Order } from "@/lib/models/Order"
 import { User } from "@/lib/models/User"
 import { Appointment } from "@/lib/models/Appointment"
 import { Invoice } from "@/lib/models/Invoice"
+import { computeInvoiceStatus } from "@/lib/invoices/status"
 import { notifyRole } from "@/lib/notify"
 import { buildItemTotals, nextOrderNumber, notifyOrderCreated } from "@/lib/orderHelpers"
 
 // List orders. Admin/owner see everything (optionally filtered); a plain
 // customer only ever sees their own.
 export const GET = withApiErrors(async (request) => {
-  const { user } = await authenticate(request)
+  const auth = await authenticate(request)
+  const { user } = auth
 
   const params = new URL(request.url).searchParams
   const status = params.get("status")
@@ -21,7 +24,10 @@ export const GET = withApiErrors(async (request) => {
   const deliveryTo = params.get("deliveryTo")
 
   const query = {}
-  if (user.role === "customer") {
+  // Seeing every order is a permission; without it (customers, and any
+  // staff role not granted orders.view) only your own orders are listed.
+  const seesAll = can(auth, "orders.view")
+  if (!seesAll) {
     query.customerId = user._id
   }
   if (status && status !== "all") query.status = status
@@ -62,15 +68,16 @@ export const GET = withApiErrors(async (request) => {
   // Attach a lightweight invoice summary per order (if one exists) so the
   // UI can show "Vis faktura" vs "Opprett faktura" without a round-trip per row.
   const orderIds = orders.map((o) => o._id)
-  const invoices = await Invoice.find({ orderId: { $in: orderIds } }).select("orderId invoiceNumber status")
+  const invoices = await Invoice.find({ orderId: { $in: orderIds } }).select("orderId invoiceNumber status grandTotal amountPaid dueDate")
   const invoiceByOrder = new Map(invoices.map((i) => [String(i.orderId), i]))
 
   return NextResponse.json({
     orders: orders.map((o) => {
       const inv = invoiceByOrder.get(String(o._id))
       return {
-        ...o.toObject(),
-        invoice: inv ? { _id: inv._id, invoiceNumber: inv.invoiceNumber, status: inv.status } : null,
+        // Your own order is never redacted; staff see contact fields per permission.
+        ...(seesAll ? redact(auth, o, CUSTOMER_CONTACT_FIELDS) : o.toObject()),
+        invoice: inv ? { _id: inv._id, invoiceNumber: inv.invoiceNumber, status: computeInvoiceStatus(inv) } : null,
       }
     }),
     total,
@@ -80,8 +87,7 @@ export const GET = withApiErrors(async (request) => {
 })
 
 export const POST = withApiErrors(async (request) => {
-  const { user } = await authenticate(request)
-  requireRole(user, ["administrator", "owner"])
+  const { user } = requirePermission(await authenticate(request), "orders.create")
 
   const {
     customerName,

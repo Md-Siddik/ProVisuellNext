@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
-import { authenticate, requireRole, withApiErrors, ApiError } from "@/lib/auth"
+import { authenticate, withApiErrors, ApiError } from "@/lib/auth"
+import { requirePermission } from "@/lib/access"
 import { Order } from "@/lib/models/Order"
 import { Appointment } from "@/lib/models/Appointment"
 import { Invoice } from "@/lib/models/Invoice"
@@ -9,13 +10,15 @@ import { notifyCustomerOfDecision } from "@/lib/orderHelpers"
 
 export const PATCH = withApiErrors(async (request, { params }) => {
   const { id } = await params
-  const { user } = await authenticate(request)
-  requireRole(user, ["administrator", "owner"])
+  const auth = await authenticate(request)
+  const { user } = auth
 
   const { status } = (await request.json().catch(() => ({}))) || {}
   if (!["approved", "rejected", "completed"].includes(status)) {
     throw new ApiError(400, "status must be 'approved', 'rejected' or 'completed'")
   }
+  // Each decision is its own permission (orders.approve / .reject / .complete).
+  requirePermission(auth, { approved: "orders.approve", rejected: "orders.reject", completed: "orders.complete" }[status])
 
   // "completed" is a follow-up milestone on an already-approved order, not
   // a new decision — decidedAt/decidedBy must stay pinned to the original

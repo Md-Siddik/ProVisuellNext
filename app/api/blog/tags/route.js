@@ -9,7 +9,7 @@ import { BlogTag } from "@/lib/models/BlogTag"
 export const GET = withApiErrors(async () => NextResponse.json({ tags: await getPublicTags(20) }))
 
 export const POST = withApiErrors(async (request) => {
-  await requireBlogAdmin(request)
+  await requireBlogAdmin(request, "blog.create", "blog.edit")
   const body = (await request.json().catch(() => ({}))) || {}
   const name = String(body.name || "").trim().slice(0, 40)
   const slug = slugify(name)

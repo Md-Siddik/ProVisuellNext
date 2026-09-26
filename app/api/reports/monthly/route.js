@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server"
-import { authenticate, requireRole, withApiErrors } from "@/lib/auth"
+import { authenticate, withApiErrors } from "@/lib/auth"
+import { requirePermission } from "@/lib/access"
 import { Invoice } from "@/lib/models/Invoice"
+import { computeInvoiceStatus } from "@/lib/invoices/status"
 import { Expense } from "@/lib/models/Expense"
 
 // Anything short of actually paid or cancelled still owes money.
@@ -58,8 +60,7 @@ function pctChange(current, previous) {
 }
 
 export const GET = withApiErrors(async (request) => {
-  const { user } = await authenticate(request)
-  requireRole(user, ["administrator", "owner"])
+  requirePermission(await authenticate(request), "reports.view")
 
   const month = new URL(request.url).searchParams.get("month") || new Date().toISOString().slice(0, 7)
   const [current, previous] = await Promise.all([totalsFor(month), totalsFor(prevMonthStr(month))])
@@ -147,7 +148,7 @@ export const GET = withApiErrors(async (request) => {
         customerName: i.customer?.name || "Ukjent kunde",
         amount: Math.max(0, i.grandTotal - (i.amountPaid || 0)),
         dueDate: i.dueDate,
-        status: i.status,
+        status: computeInvoiceStatus(i),
       })),
     updatedAt: new Date().toISOString(),
   })

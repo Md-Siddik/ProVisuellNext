@@ -12,7 +12,7 @@ function DashboardRedirect() {
   useEffect(() => {
     if (loading) return
     if (role === "owner") router.replace("/dashboard/owner")
-    else if (role === "administrator") router.replace("/dashboard/admin")
+    else if (["administrator", "moderator", "superadmin"].includes(role)) router.replace("/dashboard/admin")
     else if (role === "customer") router.replace("/mine-bestillinger")
     // Role not resolved to anything we recognize (sync failed, or a brand
     // new account with a role our checks don't cover) — bail to the

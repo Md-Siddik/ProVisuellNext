@@ -9,7 +9,7 @@ import { BlogTag } from "@/lib/models/BlogTag"
 // Renaming a tag re-points every post that used it.
 export const PATCH = withApiErrors(async (request, { params }) => {
   const { id } = await params
-  await requireBlogAdmin(request)
+  await requireBlogAdmin(request, "blog.edit")
   assertObjectId(id)
   const tag = await BlogTag.findById(id)
   if (!tag) throw new ApiError(404, "Not found")
@@ -32,7 +32,7 @@ export const PATCH = withApiErrors(async (request, { params }) => {
 
 export const DELETE = withApiErrors(async (request, { params }) => {
   const { id } = await params
-  await requireBlogAdmin(request)
+  await requireBlogAdmin(request, "blog.delete")
   assertObjectId(id)
   const tag = await BlogTag.findByIdAndDelete(id)
   if (!tag) throw new ApiError(404, "Not found")

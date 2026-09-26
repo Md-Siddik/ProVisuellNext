@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { ArrowLeft, Eye, ImagePlus, Save, Send, Trash2, Upload, X } from "lucide-react"
 import { api } from "@/lib/api"
 import { useTranslation } from "@/lib/i18n"
+import { useAuth } from "@/context/AuthContext"
 import { toEmbedUrl } from "@/components/blog/blogUi"
 import "@/components/blog/blog.css"
 import RichTextEditor from "./RichTextEditor"
@@ -95,6 +96,8 @@ function PreviewModal({ form, categoryName, onClose }) {
 
 export default function PostEditor({ postId, taxonomy, onClose, onSaved, refreshTaxonomy }) {
   const { t } = useTranslation()
+  const { can } = useAuth()
+  const canPublish = can("blog.publish")
   const isNew = !postId
   const [form, setForm] = useState(EMPTY)
   const [loading, setLoading] = useState(!isNew)
@@ -284,7 +287,7 @@ export default function PostEditor({ postId, taxonomy, onClose, onSaved, refresh
             {saving === "draft" ? <Spinner /> : <Save size={15} />}
             {t("blogAdmin.editor.saveDraft")}
           </button>
-          {form.status !== "published" ? (
+          {!canPublish ? null : form.status !== "published" ? (
             <button type="button" onClick={() => save("published")} disabled={busy} className={btnPrimary}>
               {saving === "published" ? <Spinner /> : <Send size={15} />}
               {t("blogAdmin.editor.publish")}
@@ -353,7 +356,7 @@ export default function PostEditor({ postId, taxonomy, onClose, onSaved, refresh
           <Card className="space-y-[14px] p-[16px]">
             <Field label={t("blogAdmin.editor.status")} htmlFor="pe-status">
               <select id="pe-status" value={form.status} onChange={(e) => set({ status: e.target.value })} className={inputClass}>
-                {["draft", "published", "scheduled", "archived"].map((s) => (
+                {(canPublish ? ["draft", "published", "scheduled", "archived"] : ["draft"]).map((s) => (
                   <option key={s} value={s}>
                     {t(`blogAdmin.status.${s}`)}
                   </option>

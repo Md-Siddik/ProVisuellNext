@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server"
-import { authenticate, requireRole, withApiErrors } from "@/lib/auth"
+import { authenticate, withApiErrors } from "@/lib/auth"
+import { requirePermission } from "@/lib/access"
 import { Conversation } from "@/lib/models/Conversation"
 
 export const POST = withApiErrors(async (request, { params }) => {
   const { id } = await params
-  const { user } = await authenticate(request)
-  requireRole(user, ["administrator", "owner"])
+  requirePermission(await authenticate(request), "messages.reply")
   try {
     const result = await Conversation.updateOne({ _id: id }, { $set: { "typing.admin": new Date() } })
     if (!result.matchedCount) {

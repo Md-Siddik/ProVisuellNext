@@ -5,7 +5,9 @@ import { getLocale } from "@/lib/i18n/locale"
 import { useSearchParams } from "next/navigation"
 import { AlertCircle, ChevronLeft, Mail, MessageSquare, Send } from "lucide-react"
 import { api } from "@/lib/api"
+import { isTabHidden } from "@/hooks/useSharedPoll"
 import { useTranslation } from "@/lib/i18n"
+import { useAuth } from "@/context/AuthContext"
 
 const TYPING_STALE_MS = 5000
 const TYPING_POLL_MS = 2500
@@ -44,7 +46,14 @@ function timeAgo(iso, t) {
 export default function Meldinger() {
   const { t } = useTranslation()
   const searchParams = useSearchParams()
-  const [tab, setTab] = useState(searchParams.get("tab") === "emails" ? "emails" : "chats")
+  // Visibility only; the API enforces the same permissions. A moderator gets
+  // website chat only — no email inbox and no email sending.
+  const { can } = useAuth()
+  const canChats = can("messages.view")
+  const canReply = can("messages.reply")
+  const canEmails = can("messages.viewEmailInbox")
+  const canSendEmail = can("messages.sendEmail")
+  const [tab, setTab] = useState(() => ((searchParams.get("tab") === "emails" && canEmails) || !canChats ? "emails" : "chats"))
   const [emails, setEmails] = useState([])
   const [loadingEmails, setLoadingEmails] = useState(true)
   const [activeEmailId, setActiveEmailId] = useState(null)
@@ -90,6 +99,7 @@ export default function Meldinger() {
   useEffect(() => {
     let cancelled = false
     async function load(isFirst) {
+      if (!canChats) return
       try {
         const { conversations } = await api.get("/messages")
         if (cancelled) return
@@ -105,23 +115,28 @@ export default function Meldinger() {
     // Poll so a brand new conversation (or one moving to the top, or an
     // unread badge appearing on another thread) shows up without a manual
     // refresh.
-    const interval = setInterval(() => load(false), 8000)
+    // Skipped while the tab is hidden; resumes on the next tick once visible.
+    const interval = setInterval(() => !isTabHidden() && load(false), 8000)
     return () => {
       cancelled = true
       clearInterval(interval)
     }
-  }, [])
+  }, [canChats])
 
   // A notification linking to ?tab=emails can land while this page is
   // already open, so the tab follows the URL rather than only its first value.
   const tabParam = searchParams.get("tab")
   useEffect(() => {
-    if (tabParam === "emails") setTab("emails")
-  }, [tabParam])
+    if (tabParam === "emails" && canEmails) setTab("emails")
+  }, [tabParam, canEmails])
 
   useEffect(() => {
     let cancelled = false
     async function loadEmails() {
+      if (!canEmails) {
+        setLoadingEmails(false)
+        return
+      }
       try {
         const { emails } = await api.get("/contact-emails")
         if (!cancelled) setEmails(emails)
@@ -132,12 +147,12 @@ export default function Meldinger() {
       }
     }
     loadEmails()
-    const interval = setInterval(loadEmails, 8000)
+    const interval = setInterval(() => !isTabHidden() && loadEmails(), 8000)
     return () => {
       cancelled = true
       clearInterval(interval)
     }
-  }, [])
+  }, [canEmails])
 
   const unreadEmails = emails.filter((m) => !m.read).length
   const activeEmail = emails.find((m) => m._id === activeEmailId) || null
@@ -215,7 +230,7 @@ export default function Meldinger() {
     load()
     // Poll the open thread so a customer's new message — and typing status
     // — appears live.
-    const interval = setInterval(load, TYPING_POLL_MS)
+    const interval = setInterval(() => !isTabHidden() && load(), TYPING_POLL_MS)
     return () => {
       cancelled = true
       clearInterval(interval)
@@ -302,9 +317,9 @@ export default function Meldinger() {
         <div className={`min-h-0 flex-col border-b border-white/[0.08] lg:border-b-0 lg:border-r ${mobileDetailOpen ? "hidden lg:flex" : "flex"}`}>
           <div className="flex shrink-0 gap-[6px] border-b border-white/[0.06] p-[10px]">
             {[
-              { id: "chats", label: t("messagesPage.tabChats"), icon: MessageSquare, unread: 0 },
-              { id: "emails", label: t("messagesPage.tabEmails"), icon: Mail, unread: unreadEmails },
-            ].map((tabItem) => (
+              canChats && { id: "chats", label: t("messagesPage.tabChats"), icon: MessageSquare, unread: 0 },
+              canEmails && { id: "emails", label: t("messagesPage.tabEmails"), icon: Mail, unread: unreadEmails },
+            ].filter(Boolean).map((tabItem) => (
               <button
                 key={tabItem.id}
                 type="button"
@@ -351,7 +366,7 @@ export default function Meldinger() {
                         <p className={`truncate text-[13.5px] ${unread > 0 ? "font-[800] text-white" : "font-[700] text-white/90"}`}>
                           {c.customerName}
                         </p>
-                        <p className="truncate text-[12px] text-white/45">{c.customerEmail}</p>
+                        {c.customerEmail && <p className="truncate text-[12px] text-white/45">{c.customerEmail}</p>}
                       </div>
                       <div className="flex shrink-0 flex-col items-end gap-[5px]">
                         <span className="text-[11px] text-white/35">{timeAgo(c.lastMessageAt, t)}</span>
@@ -459,7 +474,7 @@ export default function Meldinger() {
                   </div>
                 )}
 
-                <div className="flex shrink-0 items-end gap-[10px] border-t border-white/[0.08] px-[16px] py-[12px]">
+                <div className={`flex shrink-0 items-end gap-[10px] border-t border-white/[0.08] px-[16px] py-[12px] ${canSendEmail ? "" : "hidden"}`}>
                   <textarea
                     ref={emailTextareaRef}
                     value={emailDraft}
@@ -507,7 +522,7 @@ export default function Meldinger() {
                 </button>
                 <div className="min-w-0">
                   <p className="truncate text-[14px] font-[700] text-white">{active.customerName}</p>
-                  <p className="truncate text-[12px] text-white/45">{active.customerEmail}</p>
+                  {active.customerEmail && <p className="truncate text-[12px] text-white/45">{active.customerEmail}</p>}
                 </div>
               </div>
 
@@ -539,7 +554,7 @@ export default function Meldinger() {
                 </div>
               )}
 
-              <div className="flex shrink-0 items-end gap-[10px] border-t border-white/[0.08] px-[16px] py-[12px]">
+              <div className={`flex shrink-0 items-end gap-[10px] border-t border-white/[0.08] px-[16px] py-[12px] ${canReply ? "" : "hidden"}`}>
                 <textarea
                   ref={textareaRef}
                   value={draft}

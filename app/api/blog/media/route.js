@@ -13,7 +13,7 @@ const MAX_IMAGE = 10 * 1024 * 1024
 const MAX_VIDEO = 80 * 1024 * 1024
 
 export const GET = withApiErrors(async (request) => {
-  await requireBlogAdmin(request)
+  await requireBlogAdmin(request, "blog.view")
   const sp = new URL(request.url).searchParams
   const page = toInt(sp.get("page"), 1, { max: 1000 })
   const limit = toInt(sp.get("limit"), 24, { max: 60 })
@@ -30,7 +30,7 @@ export const GET = withApiErrors(async (request) => {
 })
 
 export const POST = withApiErrors(async (request) => {
-  const { user } = await requireBlogAdmin(request)
+  const { user } = await requireBlogAdmin(request, "blog.create", "blog.edit")
   const form = await request.formData().catch(() => null)
   const file = form?.get("file")
   if (!file || typeof file.arrayBuffer !== "function") throw new ApiError(400, "No file uploaded")

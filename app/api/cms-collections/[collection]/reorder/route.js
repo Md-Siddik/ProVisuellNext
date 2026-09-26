@@ -1,4 +1,5 @@
-import { authenticate, requireRole, withApiErrors, ApiError } from "@/lib/auth"
+import { authenticate, withApiErrors, ApiError } from "@/lib/auth"
+import { requirePermission } from "@/lib/access"
 import { CmsItem } from "@/lib/models/CmsItem"
 import { assertValidCollection } from "@/lib/cmsHelpers"
 
@@ -6,8 +7,7 @@ import { assertValidCollection } from "@/lib/cmsHelpers"
 export const POST = withApiErrors(async (request, { params }) => {
   const { collection } = await params
   assertValidCollection(collection)
-  const { user } = await authenticate(request)
-  requireRole(user, ["administrator"])
+  requirePermission(await authenticate(request), "cms.edit")
 
   const { ids } = (await request.json().catch(() => ({}))) || {}
   if (!Array.isArray(ids) || !ids.length) throw new ApiError(400, "ids array required")

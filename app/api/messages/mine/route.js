@@ -61,6 +61,14 @@ export const POST = withApiErrors(async (request) => {
           link: "/dashboard/admin/meldinger",
         })
       )
+      await Promise.resolve(
+        notifyRole("moderator", {
+          type: "chat_message",
+          title: "Ny melding fra kunde",
+          message: notificationMessage,
+          link: "/dashboard/admin/meldinger",
+        })
+      )
     } catch (notificationError) {
       console.error("Chat notification failed:", notificationError)
     }

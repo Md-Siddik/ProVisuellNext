@@ -18,7 +18,7 @@ const SORTS = {
 
 // Management list: every status, paginated, no article bodies.
 export const GET = withApiErrors(async (request) => {
-  await requireBlogAdmin(request)
+  await requireBlogAdmin(request, "blog.view")
   const sp = new URL(request.url).searchParams
   const filter = {}
   const status = sp.get("status")

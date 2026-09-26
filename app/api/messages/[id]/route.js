@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server"
-import { authenticate, requireRole, withApiErrors } from "@/lib/auth"
+import { authenticate, withApiErrors } from "@/lib/auth"
+import { CUSTOMER_CONTACT_FIELDS, redact, requirePermission } from "@/lib/access"
 import { Conversation } from "@/lib/models/Conversation"
 import { notifyUser } from "@/lib/notify"
 
 // Opening one conversation clears unread messages only for that thread.
 export const GET = withApiErrors(async (request, { params }) => {
   const { id } = await params
-  const { user } = await authenticate(request)
-  requireRole(user, ["administrator", "owner"])
+  const auth = requirePermission(await authenticate(request), "messages.view")
   try {
     const convo = await Conversation.findById(id)
     if (!convo) return NextResponse.json({ error: "Conversation not found" }, { status: 404 })
@@ -16,7 +16,7 @@ export const GET = withApiErrors(async (request, { params }) => {
     convo.unreadAdminCount = 0
     await convo.save()
 
-    return NextResponse.json({ conversation: convo })
+    return NextResponse.json({ conversation: redact(auth, convo, CUSTOMER_CONTACT_FIELDS) })
   } catch (error) {
     console.error("GET /messages/:id failed:", error)
     return NextResponse.json({ error: "Failed to load conversation" }, { status: 500 })
@@ -26,8 +26,8 @@ export const GET = withApiErrors(async (request, { params }) => {
 // Exact message text is preserved here too.
 export const POST = withApiErrors(async (request, { params }) => {
   const { id } = await params
-  const { user } = await authenticate(request)
-  requireRole(user, ["administrator", "owner"])
+  // In-app chat only — this never sends an email.
+  const auth = requirePermission(await authenticate(request), "messages.reply")
   try {
     const body = (await request.json().catch(() => ({}))) || {}
     const rawText = typeof body.text === "string" ? body.text : ""
@@ -66,7 +66,7 @@ export const POST = withApiErrors(async (request, { params }) => {
       console.error("Customer notification failed:", notificationError)
     }
 
-    return NextResponse.json({ conversation: convo, sentMessage: messageText })
+    return NextResponse.json({ conversation: redact(auth, convo, CUSTOMER_CONTACT_FIELDS), sentMessage: messageText })
   } catch (error) {
     console.error("POST /messages/:id failed:", error)
     return NextResponse.json({ error: "Failed to send reply" }, { status: 500 })

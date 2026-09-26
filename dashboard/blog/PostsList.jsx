@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react"
 import { CopyPlus, ExternalLink, Heart, ImageOff, MessageCircle, Pencil, Search, Star, Trash2, Undo2, Send, Plus } from "lucide-react"
 import { api } from "@/lib/api"
 import { useTranslation } from "@/lib/i18n"
+import { useAuth } from "@/context/AuthContext"
 import { Card, Empty, ErrorNote, LoadingBlock, Pager, StatusBadge, btnPrimary, fmtDate, iconBtn, inputClass, useDebounced } from "./adminUi"
 
 const PAGE_SIZE = 10
@@ -21,6 +22,7 @@ function Thumb({ post }) {
 
 export default function PostsList({ preset, taxonomy, onEdit, onCreate }) {
   const { t } = useTranslation()
+  const { can } = useAuth()
   const [q, setQ] = useState("")
   const [status, setStatus] = useState(preset === "all" ? "" : preset)
   const [category, setCategory] = useState("")
@@ -139,9 +141,11 @@ export default function PostsList({ preset, taxonomy, onEdit, onCreate }) {
       <button type="button" className={iconBtn} title={t("blogAdmin.posts.duplicate")} aria-label={t("blogAdmin.posts.duplicate")} disabled={busyId === p._id} onClick={() => duplicate(p)}>
         <CopyPlus size={15} />
       </button>
-      <button type="button" className={`${iconBtn} hover:!text-red-400`} title={t("blogAdmin.posts.delete")} aria-label={t("blogAdmin.posts.delete")} disabled={busyId === p._id} onClick={() => remove(p)}>
-        <Trash2 size={15} />
-      </button>
+      {can("blog.delete") && (
+        <button type="button" className={`${iconBtn} hover:!text-red-400`} title={t("blogAdmin.posts.delete")} aria-label={t("blogAdmin.posts.delete")} disabled={busyId === p._id} onClick={() => remove(p)}>
+          <Trash2 size={15} />
+        </button>
+      )}
     </div>
   )
 

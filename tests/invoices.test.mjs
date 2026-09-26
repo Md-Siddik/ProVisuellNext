@@ -89,7 +89,7 @@ test("email: tag follows the same rule for unpaid / paid / overdue", () => {
 })
 
 test("email: status tag and labels follow the customer's language", () => {
-  const expected = { no: "UTESTÅENDE", en: "DUE", sv: "UTESTÅENDE", da: "UDESTÅENDE", fi: "AVOIN" }
+  const expected = { no: "UTESTÅENDE", en: "DUE", sv: "UTESTÅENDE", da: "UDESTÅENDE", fi: "AVOIN", ro: "DE PLATĂ" }
   for (const [lang, label] of Object.entries(expected)) {
     const e = renderInvoiceEmail(full, { lang })
     assert.equal(e.tag, "DUE")

@@ -5,7 +5,7 @@ import { isLanguage } from "@/lib/i18n/server"
 
 // The signed-in user's display preferences:
 //   timeFormat "12h" | "24h" — presentation only, never changes stored times
-//   language   "no" | "en" | "sv" | "fi" | "da" — the language emails to them use
+//   language   "no" | "en" | "sv" | "fi" | "da" | "ro" — the language emails to them use
 export const PATCH = withApiErrors(async (request) => {
   const { user } = await authenticate(request)
   const { timeFormat, language } = (await request.json().catch(() => ({}))) || {}

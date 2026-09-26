@@ -3,7 +3,7 @@ import test from "node:test"
 import assert from "node:assert/strict"
 import { SHARED_DEFAULTS, isSharedContentKey, parseLegacyCopyright, resolveSiteContent } from "../lib/siteContent.js"
 
-const LANGS = ["no", "en", "sv", "fi", "da"]
+const LANGS = ["no", "en", "sv", "fi", "da", "ro"]
 const row = (contentKey, language, value, updatedAt = "2026-09-01T00:00:00Z", type = "text") => ({ contentKey, language, value, type, updatedAt })
 
 test("shared vs translatable keys", () => {

@@ -1208,7 +1208,7 @@ test("Roles: changing Administrator permissions applies to every administrator o
 // ---------------------------------------------------------------------------
 // Website Editor: shared values vs translations
 // ---------------------------------------------------------------------------
-const LANGS = ["no", "en", "sv", "fi", "da"]
+const LANGS = ["no", "en", "sv", "fi", "da", "ro"]
 const siteContent = async (lang) => (await call(`/site-content?lang=${lang}`)).data.content
 const putContent = (key, body, who = "admin") => call(`/site-content/${encodeURIComponent(key)}`, { method: "PUT", token: as(who), body })
 
@@ -1231,7 +1231,7 @@ test("Website Editor: a translated heading changes one language only", async () 
   assert.equal(r.status, 200)
   assert.equal(r.data.shared, false)
   assert.equal((await siteContent("en"))["hero.title"], `E2E heading ${run}`)
-  for (const lang of ["no", "sv", "fi", "da"]) assert.notEqual((await siteContent(lang))["hero.title"], `E2E heading ${run}`, lang)
+  for (const lang of ["no", "sv", "fi", "da", "ro"]) assert.notEqual((await siteContent(lang))["hero.title"], `E2E heading ${run}`, lang)
   assert.equal((await siteContent("no"))["hero.title"], before["hero.title"], "Norwegian unchanged")
 })
 

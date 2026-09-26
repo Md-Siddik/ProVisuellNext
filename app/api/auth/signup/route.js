@@ -39,8 +39,8 @@ const COPY = {
 }
 
 function verificationEmail({ name, link, lang }) {
-  // Swedish and Danish readers get the Norwegian text; Finnish readers English.
-  const c = COPY[["en", "fi"].includes(lang) ? "en" : "no"]
+  // Swedish and Danish readers get the Norwegian text; Finnish and Romanian readers English.
+  const c = COPY[["en", "fi", "ro"].includes(lang) ? "en" : "no"]
   const text = `${c.greeting(name)}\n\n${c.body}\n\n${link}\n\n${c.expiry}`
   const html = `<!doctype html>
 <html><body style="margin:0;background:#f4f4f5;font-family:Arial,Helvetica,sans-serif;color:#18181b">
